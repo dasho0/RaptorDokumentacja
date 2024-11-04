@@ -2,5 +2,64 @@
 \section{Projektowanie}		%3
 %Opis przygotowania narzędzi (git, visual studio). Wybór i opis bibliotek, klas. Szkic layoutów. Pseudo kody. Opisy wykorzystanych algorytmów (np. algorytm sortowania). Dokładniejsze określenie założeń i działania aplikacji, (np.: ten przycisk otworzy takie okno a w tym oknie wpisujemy takie dane).
 
+\subsection{Założenie programu}
+W tym rodziale przedstawiona zostanie ogólna zasada działania programu.
 
+Głównym celem programu jest odtwarzanie muzyki i nagrywanie dźwięku.
 
+\subsection{Przedstawienie menu}
+Program składa się z trzech okien.
+
+\begin{itemize}
+	\item Okno wyboru autora - AuthorsView()
+	\item Okno wyboru albumu - AuthorView()
+	\item Okno wyboru utwor - SongView()
+	\item Okno dyktafonu - RecorderView()
+\end{itemize}
+
+Aplikacja włączając się wyświetla menu wyboru autora. Menu przedstawione jest w postaci kafelkowej.
+
+Po wybraniu autora włączane jest menu wyboru albumu.
+
+Po wybraniu albumu otwirane jest menu wyboru piosenek należących do tego utworu.
+
+\subsection{Odczyt i przetwarzanie plików}
+
+Aplikacja będzie posiadać bazę danych. Baza danych będzie się składać z trzech tabelek.
+
+\begin{itemize}
+	\item Tabelka Autorów
+	\item Tabelka Albumów
+	\item Tabelka Utworów
+\end{itemize}
+
+W bazie danych będą istniały powiązania. W tabelce autorów będą trzy kolumny:
+\begin{itemize}
+	\item id\_aut
+	\item name
+	\item id\_album
+\end{itemize}
+Id\_aut zawiera id autora, name to nazwa autora, id\_album zawiera id albumu. Id będą ptrzebne do utworzenia powiązań.
+
+W tabelce Albumów będą cztery kolumny:
+\begin{itemize}
+	\item id\_album
+	\item name
+	\item id\_song,
+	\item id\_aut
+\end{itemize}
+Jak powyżej, id\_album to id albumu, name to nazwa, id\_sog to id piosenki, id\_aut to id autora.
+
+W tabelce utworów będzą cztery kolumny
+\begin{itemize}
+	\item id\_song
+	\item name
+	\item id\_album
+	\item id\_aut
+\end{itemize}
+
+Jak powyżej, id\_song to id piosenki, name to nazwa, id\_album to id albumu, id\_aut to id autora.
+
+Id są potrzene do utworzenia powiązań między tabelkami.
+
+Tabelka autorów będzie odwoływała się do tabelki albumów za pomocą id albumu. Tabelka albumów będzie odwoływała się do tabelki piosenek przy pomocy id song. Tabelka piosenek będzie posiadała odwołania do tabelek autorów i albumów za pomocą id aut i id album.
