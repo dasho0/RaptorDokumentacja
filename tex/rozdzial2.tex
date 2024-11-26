@@ -4,7 +4,7 @@
 
 \subsection{Ogólny opis wymagań projektu}
 
-Aplikacja jest zaprojektowana w Android Studio w języku Kotlin. Całe UI aplikacji będzie zbudowane na podstawie Frameworka Jetpack Compose\cite{doc_compose} Używając wbudowanych bibliotek w SDK Androida, będzie mogła odczytywać pliki ze wskazanego folderu. Odczytywanie tagów z plików odbędzie się za pomocą biblioteki Taglib\cite{doc_ktaglib}, która posiada nieoficjalne bindingi do Kotlina. Wszelki processing audio np. na potrzeby wizualizacji może zostać wykonany za pomocą SDK i wbudowanego modułu AudioProcessor\cite{doc_audioproc}. Odtwarzaniem pliku będzie się zajmował moduł MediaPlayer\cite{doc_mediaplayer}.
+Aplikacja jest zaprojektowana w Android Studio w języku Kotlin. Całe UI aplikacji będzie zbudowane na podstawie Frameworka \texttt{Jetpack Compose}\cite{doc_compose} Używając wbudowanych bibliotek w SDK Androida, będzie mogła odczytywać pliki ze wskazanego folderu. Odczytywanie tagów z plików odbędzie się za pomocą biblioteki \texttt{Media3}\cite{doc_media3}. Jest to oficjalna biblioteka Googlea do obsługi plików medialnych na Androidzie. Wszelki processing audio np. na potrzeby wizualizacji może zostać wykonany za pomocą SDK i wbudowanego modułu \texttt{AudioProcessor}\cite{doc_audioproc}. Odtwarzaniem pliku będzie zajmowała się biblioteka \texttt{ExoPlayer}\cite{doc_exoplayer}, posiadająca częściową integrację z \texttt{Media3}. Informacje o utworach powinny być ładowane do bazy danych. Będzie ona lokalnie, na urządzeniu. Ku temu celu, można użyć biblioteki \texttt{Room}\cite{doc_room}. Biblioteka ta jest wrapperem do wbudowanych funkcjonalności \texttt{SQL} Androida.
 
 \subsection{Ogólny zarys narzędzi użytych w projekcie}
 
