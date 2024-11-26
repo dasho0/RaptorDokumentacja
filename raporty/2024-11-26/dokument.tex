@@ -55,26 +55,44 @@
 		{AKADEMIA NAUK STOSOWANYCH W NOWYM SĄCZU\\Wydział Nauk Inżynieryjnych, Katedra informatyki} &  &  &  &  &  \\
 		Przedmiot:  & Programowanie urządzeń mobilnych – projekt, mgr inż. Dawid Kotlarski          &  &  &  &  \\
 		Temat:      & Raptor                                                         &  &  &  &  \\
-		Grupa:      & IS-2(s)P3  & Nr raportu: & 4 & Data: & 26.11.2024 \\
+		Grupa:      & IS-2(s)P3  & Nr raportu: & 7 & Data: & 26.11.2024 \\
 		Osoby:      & Stanek Mateusz, Szołdra Dawid, Filip Wąchała                                              &  &  &  &            
 	\end{tblr}
 \end{table}
 
 
 \section{Wykonane zadania}
--Dodanie działającego odtwarzacza który jest jedną z głównych części aplikacji.\\
--Wprowadzenie poprawek do NavHosta.\\
--Dlasza praca nad bazdanych, jest bardziej skomplikowana ni zakadano.\\
--Dodanie Topbara
+\begin{itemize}
+	\item Dodanie działającego odtwarzacza który jest jedną z głównych części aplikacji.
+	
+	\item Wprowadzenie poprawek do NavHosta. Usunięto zbędny ekran wyboru piosenek
+
+	\item Dodanie Topbara, umożliwiającego wybór plików.
+
+	\item Zrefaktoryzowano kod, aby wszystkie używane klasy używały frameworka \texttt{hilt} do dependency injection. Usuwa to konieczność przekazywania parametru Context dla każdej klasy, która chce uzyskać dostęp do zasobów systemowych. Ponadto, może pomóc on w unit testach, jeśli zostaną dodane.
+\end{itemize}
+
 \section{Niewykonane zadania}
 
 \section{Napotkane problemy}
--Podczas modyfikacji NavHost albumid tymczasowo pobierał stringa z nazwy.
+
+\begin{itemize}
+	\item Jeżeli przeskanuje się te same pliki po raz drugi, albumy zostaną zdublowane.
+\end{itemize}
 
 \section{Zadania na kolejny tydzień}
--Dokończenie niewykonanych zadań, oraz dodanie biometryki oraz czujnika światła.
+
+\begin{itemize}
+	\item Dodanie obsługi zdjęć albumów
+	
+	\item Generalne polepszenie interfejsu playera
+	
+	\item Rozpoczęcie pracy nad customowym UI progress bara w playerze
+\end{itemize}
 
 \section{Stan dokumentacji projektowej}
--Nie zmieniona.
+\begin{itemize}
+	\item Dodano nowo używane biblioteki do rozdziału drugiego, poprawiono formatowanie
+\end{itemize}
 
 \end{document}
