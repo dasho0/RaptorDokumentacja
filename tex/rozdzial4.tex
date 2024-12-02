@@ -2,5 +2,131 @@
 \section{Implementacja}		%4
 %Wkleić szkielet kodu, wraz z komentarzami. Opisać zmienne, struktury do czego służą. Opisać procedury, metody co wykonują. Opisać nowe zdefiniowane klasy. Opisać dziedziczenie. Opisać nowo utworzone pliki za co odpowiadają.
 
+\subsection{Zarządzanie bazą danych}
 
+\subsubsection{Klasa \texttt{DatabaseManager}} \label{sec:DatabaseManager}
 
+Za zarządzanie bazą danych odpowiedzialna jest klasa \texttt{DatabaseManager}, której kod jest zamieszony na listingu nr. \ref{lst:DatabaseManager_struct}. Klasa jest wrapperem do bazy danych \texttt{Room}\cite{doc_room} i do niej akcesorów.
+
+\begin{lstlisting}[caption=Strukutura klasy \texttt{DatabaseManager}, label={lst:DatabaseManager_struct}, language=kotlin]
+@Singleton
+class DatabaseManager @Inject constructor(
+    @ApplicationContext context: Context
+) {
+    private val database: LibraryDb = Room.databaseBuilder(
+        context,
+        LibraryDb::class.java, "Library"
+    ).build()
+
+    fun collectAuthorsFlow(): Flow<List<Author>> = database.uiDao().getAllAuthorsFlow()
+
+    fun collectAlbumsByAuthorFlow(authorName: String): Flow<List<Album>> {
+        return database.uiDao().getAuthorWithAlbums(authorName)
+            .map { it.albums }
+    }
+
+    fun collectSongsByAlbumFlow(albumId: Long): Flow<List<Song>> {
+        return database.uiDao().getAlbumWithSongs(albumId)
+            .map { it.songs }
+    }
+	
+...
+
+    fun populateDatabase(songs: List<TagExtractor.SongInfo>) {
+        assert(Thread.currentThread().name != "main")
+
+        val dao = database.logicDao()
+
+        fun addAuthors() {
+            songs.fastForEach { song ->
+                //TODO: there should be a distinction between albumartists and regular artists
+                song.albumArtists?.fastForEach { name ->
+                    if(dao.getAuthor(name) == null) {
+                        dao.insertAuthor(Author(name = name))
+                    }
+
+                }
+            }
+        }
+
+        fun addAlbumsAndRelations() {
+            // FIXME: xdddddddd
+            val distinctAlbumArtistsList = songs
+                .map { Triple(it.album, it.albumArtists, it.coverUri) }
+                .distinct()
+            Log.d(javaClass.simpleName, "Distinct artists set: $distinctAlbumArtistsList")
+
+            distinctAlbumArtistsList.fastForEach {
+                val albumTitle = it.first.toString()
+                val artists = it.second
+                val coverUri = it.third
+
+                val albumId = dao.insertAlbum(Album(
+                    title = albumTitle,
+                    coverUri = coverUri.toString(),
+                ))
+
+                artists?.fastForEach {
+                    dao.insertAlbumAuthorCrossRef(AlbumAuthorCrossRef(
+                        albumId = albumId,
+                        name = it.toString()
+                    ))
+                }
+            }
+        }
+
+        fun addSongs() {
+            songs.fastForEach { song ->
+                Log.d(javaClass.simpleName, "NEW SONG\n")
+                Log.d(javaClass.simpleName, "Album artists: ${song.albumArtists}")
+
+                val albumWithAuthorCandidates = dao
+                    .getAlbumsByTitle(song.album.toString())
+                    .map { it.albumId }
+                    .map { dao.getAlbumWithAuthors(it) }
+                Log.d(javaClass.simpleName, "$albumWithAuthorCandidates")
+
+                var correctAlbum: Album? = null
+                albumWithAuthorCandidates.fastForEach {
+                    Log.d(javaClass.simpleName, "${song.albumArtists}, ${it.authors}")
+                    //FIXME: theese guys shouldn't be ordered, will have to refactor a bunch of
+                    // stuff with sets instead of lists
+                    if(song.albumArtists?.sorted() == it.authors.map { it.name }.sorted()) {
+                        correctAlbum = it.album
+                    }
+                }
+
+                dao.insertSong(Song(
+                    title = song.title,
+                    albumId = correctAlbum?.albumId,
+                    fileUri = song.fileUri.toString(),
+                ))
+            }
+        }
+
+        addAuthors()
+        addAlbumsAndRelations()
+        addSongs()
+    }
+}
+\end{lstlisting}
+
+% TODO: opisac co to hilt
+Na pierwszej linijce można zauważyć adnotację \texttt{@Singleton}. Pochodzi ona z bilbioteki \texttt{Hilt}\cite{doc_hilt}. Powiadamia ona bibliotekę o tym że klasa jest singletonem, czyli że ma istnieć tylko jej jedna instancja na cały program. Uczyniono to, dlatego że baza danych powinna być jedna na całą aplikację. Menadżer z nią interfejsujący, dlatego że jest używany w wielu innych klasach, też powinien mieć tylko jedną instancję, aby nie marnować pamięci.
+
+Na linijce nr. 2, widać konstruktor klasy, do którego też przy użyciu \texttt{Hilt}, wstrzykiwany jest \texttt{context}.
+
+Następnie, na linijce nr. 5, widać inicjalizację samego obiektu bazy \texttt{database}. Baza jest reprezentowana przez klasę \texttt{LibraryDb}, definicję której można zobaczyć w sekcji \ref{sec:LibraryDb}
+
+% TODO: opisac co to flow
+Dalej, do linijki nr. 22 pokazane są metody zwracające rózne elementy bazy. Wiekszosc z tych metod zwraca \texttt{Flow}\cite{TODO:}. \texttt{Room} natywnie obsługuje \texttt{Flowy}, a dlatego że wymusza dostęp do bazy z innych wątków niż główny, większość operacji wykonywanych na bazie odbywa się za pośrednictwem typów \texttt{Flow}
+
+Same metody są wrapperami do obiektów \texttt{Dao} bazy. Więcej o nich w sekcji \ref{sec:daos}. Niektóre obrabiają dane jak np. \texttt{collectSongsByAlbumFlow()} na linijce nr. 17., która mapuje zwraca piosenki z wyjściowej klasy relacyjnej.
+
+Metod tych jest więcej, lecz wyglądają one bardzo podobnie. Dla zwięzłości, mozna je pominac.
+
+% TODO: opis populateDatabase()
+
+\subsubsection{Klasa LibraryDb} \label{sec:LibraryDb}
+
+\subsubsection{Obiekty Dao} \label{sec:daos}
