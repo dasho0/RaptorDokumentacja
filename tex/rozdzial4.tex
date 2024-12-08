@@ -118,15 +118,24 @@ Na linijce nr. 2, widać konstruktor klasy, do którego też przy użyciu \textt
 
 Następnie, na linijce nr. 5, widać inicjalizację samego obiektu bazy \texttt{database}. Baza jest reprezentowana przez klasę \texttt{LibraryDb}, definicję której można zobaczyć w sekcji \ref{sec:LibraryDb}
 
-% TODO: opisac co to flow
+% TODO: opisac co to flow albo w 2 chapterze albo 3
 Dalej, do linijki nr. 22 pokazane są metody zwracające rózne elementy bazy. Wiekszosc z tych metod zwraca \texttt{Flow}\cite{TODO:}. \texttt{Room} natywnie obsługuje \texttt{Flowy}, a dlatego że wymusza dostęp do bazy z innych wątków niż główny, większość operacji wykonywanych na bazie odbywa się za pośrednictwem typów \texttt{Flow}
 
 Same metody są wrapperami do obiektów \texttt{Dao} bazy. Więcej o nich w sekcji \ref{sec:daos}. Niektóre obrabiają dane jak np. \texttt{collectSongsByAlbumFlow()} na linijce nr. 17., która mapuje zwraca piosenki z wyjściowej klasy relacyjnej.
 
-Metod tych jest więcej, lecz wyglądają one bardzo podobnie. Dla zwięzłości, mozna je pominac.
+Metod tych jest więcej, lecz wyglądają one bardzo podobnie. Dla zwięzłości, mozna je pominąć.
 
-% TODO: opis populateDatabase()
+%TODO: TagExtractor.SongInfo to będzie po prostu SongInfo jak sie mi zeche w kodzie zmienic
+Metoda \texttt{populateDatabase()} zadeklarowana na linijce nr. 24, jest odpowiedzialna za ładowanie wyjętych z plików informacji do bazy. Jako parametr odstaje ona zmienną \texttt{songs} typu \texttt{List<TagExtractor.SongInfo>}   Zadeklarowane są w niej trzy funkcje pomocnicze: \texttt{addAuthors()}, \texttt{addAlbumsAndRelations()} i \texttt{addSongs()}. Wywoływane są one po kolei w metodzie głównej.
 
+Funkcja \texttt{addAuthors()}, zadeklarowana na linijce nr. 29, jest prosta w swoim działaniu. Lista z \texttt{SongInfo} jest iterowana i po kolei wpisywani są wszyscy autorzy, którzy jeszcze w bazie nie istnieją.
+
+Funkcja \texttt{addAlbumsAndRelations()}, zadeklarowana na linijce nr. 41, odpowiada za dodawanie albumów do bazy oraz tworzenie relacji między nimi, a autorami. Tworzona zmienna \texttt{distinctAlbumArtistsList} mapuje tylko unikalne pary albumów i autorów (zmienna \texttt{coverUri} nie ma znaczenia przy określaniu autorstwa, jest przypisywana tutaj dlatego, że trudno było znaleźć dla niej lepsze miejsce). Dzięki temu początkowemu filtrowaniu, wiadomo, że każdy napotkany album będzie unikalny. Następnie, \texttt{distinctAlbumArtistsList} jest iterowana - przy każdej iteracji dodawany jest nowy album do bazy. Metoda \texttt{insertAlbum()} zwraca \texttt{id} nowo dodanego albumu. Wynik jej jest przypisywany do zmiennej \texttt{albumId} na linijce nr. 53. Potem, zostaje przypisywana relacja albumu z autorami. Autorów może być kilku, więc są oni reprezentowani przy każdej iteracji przez listę, która jest iterowana, a relacja zostaje dodawana z nazwą autora i \texttt{albumId}.
+
+%TODO: opisac insertSong()
+
+%TODO:
 \subsubsection{Klasa LibraryDb} \label{sec:LibraryDb}
 
+%TODO: 
 \subsubsection{Obiekty Dao} \label{sec:daos}
