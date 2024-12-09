@@ -137,5 +137,19 @@ Funkcja \texttt{addSongs()}, zadeklarowana na linijce nr. 67, ma na celu dodanie
 %TODO:
 \subsubsection{Klasa LibraryDb} \label{sec:LibraryDb}
 
+Klasa \texttt{LibraryDb} jest deklaracją faktycznej instancji bazy danych, która jest implementowana i generowana przez bibliotekę \texttt{Room}. Z racji tego, że jest to klasa abstrakcyjna, jej zadaniem jest określenie struktury bazy i jakie komponenty ma ona zawierać
+
+\begin{lstlisting}[caption=Deklaracja bazy LibraryDb, label={lst:LibraryDb_class}, language=kotlin]
+@Database(entities = [Song::class, Author::class, Album::class, AlbumAuthorCrossRef::class], version
+= 1)
+abstract class LibraryDb : RoomDatabase() {
+    abstract fun logicDao(): LogicDao
+    abstract fun uiDao(): UIDao
+}
+
+\end{lstlisting}
+Jak widać na listingu nr.~\ref{lst:LibraryDb_class}, na początku klasy należy zamieścić adnotację \texttt{@Database}. Powiadamia ona bibliotekę \texttt{Room} o tym, że nastepujaca klasa jest bazą danych. Parametr \texttt{entities} określa wszystkie tabele jakie mają się w klasie zawierać. O tabelach więcej w sekcji nr.~\ref{sec:tables}. Parametr \texttt{version} zajmuje się wersjonowaniem bazy. Jest on ważny przy aktualizacjach aplikacji, aby baza mogła zostać odpowiednio zmieniona. 
+
+Na linijce nr. 3 umieszczona jest faktyczna deklaracja klasy. Dziedziczy ona z klasy \texttt{RoomDatabase}. Jedyne rzeczy jakie są do dziecięcej klasy dodawane, to metody zwracające obiekty \texttt{dao}, opisane w sekcji nr.~\ref{sec:daos}.
 %TODO: 
 \subsubsection{Obiekty Dao} \label{sec:daos}
