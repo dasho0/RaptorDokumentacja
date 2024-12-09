@@ -134,7 +134,6 @@ Funkcja \texttt{addAlbumsAndRelations()}, zadeklarowana na linijce nr. 41, odpow
 
 Funkcja \texttt{addSongs()}, zadeklarowana na linijce nr. 67, ma na celu dodanie piosenek do bazy. Ciało funkcji jest w pętli iterującej się przez listę piosenek. Na początku pętli, na linijce nr. 72 deklarowana jest zmienna \texttt{albumWithAuthorCandidates}. Jest ona listą relacji album - autorzy wszystkich albumów o tej samej nazwie co ten w danym elemencie listy. Następnie, lista ta jest iterowana i przy każdej iteracji sprawdzane jest czy lista autorów w danej relacji jest równa z listą autorów danej piosenki. Jeżeli tak, wartość danego albumu z wybranej relacji jest przypisywana do zmiennej zadeklarowanej na lini nr. 78 \texttt{correctAlbum}. Na końcu funkcji, piosenka dodana jest do bazy przy użyciu metody \texttt{dao}.
 
-%TODO:
 \subsubsection{Klasa LibraryDb} \label{sec:LibraryDb}
 
 Klasa \texttt{LibraryDb} jest deklaracją faktycznej instancji bazy danych, która jest implementowana i generowana przez bibliotekę \texttt{Room}. Z racji tego, że jest to klasa abstrakcyjna, jej zadaniem jest określenie struktury bazy i jakie komponenty ma ona zawierać
@@ -148,8 +147,62 @@ abstract class LibraryDb : RoomDatabase() {
 }
 
 \end{lstlisting}
-Jak widać na listingu nr.~\ref{lst:LibraryDb_class}, na początku klasy należy zamieścić adnotację \texttt{@Database}. Powiadamia ona bibliotekę \texttt{Room} o tym, że nastepujaca klasa jest bazą danych. Parametr \texttt{entities} określa wszystkie tabele jakie mają się w klasie zawierać. O tabelach więcej w sekcji nr.~\ref{sec:tables}. Parametr \texttt{version} zajmuje się wersjonowaniem bazy. Jest on ważny przy aktualizacjach aplikacji, aby baza mogła zostać odpowiednio zmieniona. 
 
+Jak widać na listingu nr.~\ref{lst:LibraryDb_class}, na początku klasy należy zamieścić adnotację \texttt{@Database}. Powiadamia ona bibliotekę \texttt{Room} o tym, że następująca klasa jest bazą danych. Parametr \texttt{entities} określa wszystkie tabele jakie mają się w klasie zawierać. O tabelach więcej w sekcji nr.~\ref{sec:tables}. Parametr \texttt{version} zajmuje się wersjonowaniem bazy. Jest on ważny przy aktualizacjach aplikacji, aby baza mogła zostać odpowiednio zmieniona. 
 Na linijce nr. 3 umieszczona jest faktyczna deklaracja klasy. Dziedziczy ona z klasy \texttt{RoomDatabase}. Jedyne rzeczy jakie są do dziecięcej klasy dodawane, to metody zwracające obiekty \texttt{dao}, opisane w sekcji nr.~\ref{sec:daos}.
+
 %TODO: 
 \subsubsection{Obiekty Dao} \label{sec:daos}
+\subsubsection{Tabele} \label{sec:tables}
+W bibliotece \texttt{Room}, każda tabela to \texttt{dataclass} określana adnotacją \texttt{@Entity}. Kolumny takiej tabeli to po prostu pola klasy. Klucz danej tabeli jest określany adnotacją \texttt{@PrimaryKey}
+\paragraph{Author}
+
+\begin{lstlisting}[caption=Deklaracja tabeli Author, label={lst:Author_class}, language=kotlin]
+@Entity
+data class Author (
+    @PrimaryKey val name: String
+)
+\end{lstlisting}
+
+Tabela \texttt{Author}, zawarta na listingu nr.~\ref{lst:Author_class}, określa autorów. Tabela jest prosta, jedynym polem jest \texttt{name}, który jest kluczem.
+\paragraph{Album}
+
+\begin{lstlisting}[caption=Deklaracja tabeli Album, label={lst:Album_class}, language=kotlin]
+@Entity
+data class Album(
+    @PrimaryKey(autoGenerate = true) val albumId: Long = 0,
+    val title: String,
+    val coverUri: String?,
+)
+\end{lstlisting}
+
+Tabela \texttt{Album}, zawarta na listingu nr.~\ref{lst:Album_class}, określa albumy. Kluczem jest zmienna \texttt{albumId}. Klucz jest generowany automatycznie, dzięki parametrowi adnotacji \texttt{autoGenerate}. Pole \texttt{title} określa tytuł, a pole \texttt{coverUri} określa adres \texttt{URI} okładki.
+
+\paragraph{Song}
+
+\begin{lstlisting}[caption=Deklaracja tabeli Song, label={lst:Song_class}, language=kotlin]
+
+@Entity(
+    foreignKeys = [
+        ForeignKey(
+            entity = Album::class,
+            parentColumns = ["albumId"],
+            childColumns = ["albumId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+
+    indices = [Index(value = ["albumId"])]
+)
+data class Song(
+    @PrimaryKey(autoGenerate = true) val songId: Long = 0,
+    val title: String?,
+    val albumId: Long?,
+    val fileUri: String?,
+)
+
+\end{lstlisting}
+
+Klasa ta, zawarta na listingu nr.~\ref{lst:Song_class}, określa tabelę piosenek. Pole \texttt{foreignKeys} w adnotacji \texttt{@Entity} określa obce klucze, którymi posługuje się klasa (więcej o tym w sekcji nr.~\ref{sec:relations}). Pole \texttt{indices} każe indeksować pola z \texttt{albumId} ku polepszeniu szybkości bazy. W ciele klasy, pole \texttt{title} to tytuł piosenki. Pole \texttt{albumId} określa ID albumu, do którego należy dana piosenka. 
+
+\subsubsection{Relacje} \label{sec:relations}
