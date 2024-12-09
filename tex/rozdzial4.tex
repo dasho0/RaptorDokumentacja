@@ -149,12 +149,16 @@ abstract class LibraryDb : RoomDatabase() {
 \end{lstlisting}
 
 Jak widać na listingu nr.~\ref{lst:LibraryDb_class}, na początku klasy należy zamieścić adnotację \texttt{@Database}. Powiadamia ona bibliotekę \texttt{Room} o tym, że następująca klasa jest bazą danych. Parametr \texttt{entities} określa wszystkie tabele jakie mają się w klasie zawierać. O tabelach więcej w sekcji nr.~\ref{sec:tables}. Parametr \texttt{version} zajmuje się wersjonowaniem bazy. Jest on ważny przy aktualizacjach aplikacji, aby baza mogła zostać odpowiednio zmieniona. 
+
 Na linijce nr. 3 umieszczona jest faktyczna deklaracja klasy. Dziedziczy ona z klasy \texttt{RoomDatabase}. Jedyne rzeczy jakie są do dziecięcej klasy dodawane, to metody zwracające obiekty \texttt{dao}, opisane w sekcji nr.~\ref{sec:daos}.
 
 %TODO: 
 \subsubsection{Obiekty Dao} \label{sec:daos}
+
 \subsubsection{Tabele} \label{sec:tables}
+
 W bibliotece \texttt{Room}, każda tabela to \texttt{dataclass} określana adnotacją \texttt{@Entity}. Kolumny takiej tabeli to po prostu pola klasy. Klucz danej tabeli jest określany adnotacją \texttt{@PrimaryKey}
+
 \paragraph{Author}
 
 \begin{lstlisting}[caption=Deklaracja tabeli Author, label={lst:Author_class}, language=kotlin]
@@ -165,6 +169,7 @@ data class Author (
 \end{lstlisting}
 
 Tabela \texttt{Author}, zawarta na listingu nr.~\ref{lst:Author_class}, określa autorów. Tabela jest prosta, jedynym polem jest \texttt{name}, który jest kluczem.
+
 \paragraph{Album}
 
 \begin{lstlisting}[caption=Deklaracja tabeli Album, label={lst:Album_class}, language=kotlin]
