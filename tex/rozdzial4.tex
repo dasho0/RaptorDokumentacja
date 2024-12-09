@@ -208,6 +208,68 @@ data class Song(
 
 \end{lstlisting}
 
-Klasa ta, zawarta na listingu nr.~\ref{lst:Song_class}, określa tabelę piosenek. Pole \texttt{foreignKeys} w adnotacji \texttt{@Entity} określa obce klucze, którymi posługuje się klasa (więcej o tym w sekcji nr.~\ref{sec:relations}). Pole \texttt{indices} każe indeksować pola z \texttt{albumId} ku polepszeniu szybkości bazy. W ciele klasy, pole \texttt{title} to tytuł piosenki. Pole \texttt{albumId} określa ID albumu, do którego należy dana piosenka. 
+Klasa ta, zawarta na listingu nr.~\ref{lst:Song_class}, określa tabelę piosenek. Pole \texttt{foreignKeys} w adnotacji \texttt{@Entity} określa obce klucze, którymi posługuje się klasa. W tym przypadku określone jest to, że pole w \texttt{Song} \texttt{albumId} wskazuje na pole w \texttt{Album} \texttt{albumId} Pole \texttt{indices} każe indeksować pola z \texttt{albumId} ku polepszeniu szybkości bazy. W ciele klasy, pole \texttt{title} to tytuł piosenki. Pole \texttt{albumId} określa ID albumu, do którego należy dana piosenka. 
 
 \subsubsection{Relacje} \label{sec:relations}
+
+Relacje w Room są określane jako osobne \texttt{dataclassy}. Są one zadeklarowane adnotacją \texttt{@Relation} w danej klasie. Ponadto umieszczenie elementu w adnotacji \texttt{@Embedded}, pozwala klasie \enquote{przyswoić} pola danego elementu. Dzięki temu klasa może odnosić się do pól danego elementu tak jakby były one bezpośrednio w klasie. Konieczne jest umieszczenie elementu głównego, od którego będzie relacja wychodziła, do tej adnotacji.
+
+\paragraph{AlbumWithSongs} \label{sec:albumwithsongs} \
+
+Klasa \texttt{AlbumWithSongs} na listingu nr.~\ref{lst:AlbumWithSongs_class}, określa relację albumów i piosenek. 
+
+\begin{lstlisting}[caption=Deklaracja relacji \texttt{AlbumWithSongs}, label={lst:AlbumWithSongs_class}, language=kotlin]
+data class AlbumWithSongs(
+    @Embedded val album: Album,
+    @Relation(
+        parentColumn = "albumId",
+        entityColumn = "albumId"
+    )
+    val songs: List<Song>
+)
+\end{lstlisting}
+
+Relacja łączy pole \texttt{albumId} albumu z polem \texttt{albumId} piosenek. Pole \texttt{songs} zawiera wszystkie piosenki z tą samą wartością pola \texttt{albumId} co faktyczny klucz danego albumu.
+
+\paragraph{AlbumAuthorCrossRef} \label{sec:AlbumAuthorCrossRef}
+
+\begin{lstlisting}[caption=Deklaracja tabeli relacji \texttt{AlbumAuthorCrossRef}, label={lst:AlbumAuthorCrossRef_class}, language=kotlin]
+@Entity(primaryKeys = ["albumId", "name"])
+data class AlbumAuthorCrossRef(
+    val albumId: Long,
+    val name: String
+)
+
+\end{lstlisting}
+
+Tabela na listingu nr.~\ref{lst:AlbumAuthorCrossRef_class} określa relację $M$ do $N$ między albumami a autorami. Jest to tabela z dwoma kluczami głównymi: \texttt{albumId} dla tabeli \texttt{Album} i \texttt{name} dla tabeli \texttt{Author}.
+
+\paragraph{AlbumWithAuthors i AuthorWithAlbums} \
+
+Obie klasy są do siebie bardzo podobne więc zostaną omówione razem. 
+
+\begin{lstlisting}[caption=Deklaracja relacji \texttt{AlbumWithAuthors}, label={lst:AlbumWithAuthors_class}, language=kotlin]
+data class AlbumWithAuthors(
+    @Embedded val album: Album,
+    @Relation(
+        parentColumn = "albumId",
+        entityColumn = "name",
+        associateBy = Junction(AlbumAuthorCrossRef::class)
+    )
+    val authors: List<Author>
+)
+\end{lstlisting}
+
+\begin{lstlisting}[caption=Deklaracja relacji \texttt{AuthorWithAlbums}, label={lst:AuthorWithAlbums_class}, language=kotlin]
+data class AuthorWithAlbums(
+    @Embedded val author: Author,
+    @Relation(
+        parentColumn = "name",
+        entityColumn = "albumId",
+        associateBy = Junction(AlbumAuthorCrossRef::class)
+    )
+    val albums: List<Album>
+)
+\end{lstlisting}
+
+Na listingu nr.~\ref{lst:AlbumWithAuthors_class} przedstawiona jest klasa \texttt{AlbumWithAuthors}. Definiuje ona relację danego albumu z jego autorami. Dlatego, że relacja jest $M$ do $N$, w adnotacji \texttt{@Relation} dodane jest odniesienie do tabeli relacji \texttt{AlbumAuthorCrossRef}, opisanej w sekcji nr. ~\ref{sec:AlbumAuthorCrossRef}. Klucze, jakie mają być porównywane są zdefiniowane w parametrach \texttt{parentColumn}, dla \texttt{id} albumu i \texttt{entityColumn} dla nazwy autora. Wynikiem tej relacji jest lista albumów. Sytuacja wygląda podobnie w \texttt{AuthorWithAlbums}, na listingu nr.~\ref{lst:AuthorWithAlbums_class}. Tym razem to autor jest rodzicem i oczekujemy od relacji listy albumów danego autora.
