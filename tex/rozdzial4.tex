@@ -273,3 +273,117 @@ data class AuthorWithAlbums(
 \end{lstlisting}
 
 Na listingu nr.~\ref{lst:AlbumWithAuthors_class} przedstawiona jest klasa \texttt{AlbumWithAuthors}. Definiuje ona relację danego albumu z jego autorami. Dlatego, że relacja jest $M$ do $N$, w adnotacji \texttt{@Relation} dodane jest odniesienie do tabeli relacji \texttt{AlbumAuthorCrossRef}, opisanej w sekcji nr. ~\ref{sec:AlbumAuthorCrossRef}. Klucze, jakie mają być porównywane są zdefiniowane w parametrach \texttt{parentColumn}, dla \texttt{id} albumu i \texttt{entityColumn} dla nazwy autora. Wynikiem tej relacji jest lista albumów. Sytuacja wygląda podobnie w \texttt{AuthorWithAlbums}, na listingu nr.~\ref{lst:AuthorWithAlbums_class}. Tym razem to autor jest rodzicem i oczekujemy od relacji listy albumów danego autora.
+
+\subsection{Czujnik światła}
+Czujnik światła został zaimplementowany za pomocą wbudowanej funkcji. Zadaniem czujnika jest dynmiczna zmiana schematu kolorów aplikacji na podstawie danych otrzymanych z czujnika światła wbudowanego w urządzeniu mobilnym z systemem android.
+
+\begin{lstlisting}[caption=Implementacja czujnika światłą w \texttt{MainActivity.kt}, label={lst:LightSensorMain}, language=kotlin]
+	@AndroidEntryPoint
+	class MainActivity : FragmentActivity(), SensorEventListener {
+		private lateinit var sensorManager: SensorManager
+		private var lightSensor: Sensor? = null
+		private val _isDarkTheme = mutableStateOf(false)
+		private val isDarkTheme: State<Boolean> = _isDarkTheme
+		
+		private val _isAuthenticated = mutableStateOf(false)
+		private val isAuthenticated: State<Boolean> = _isAuthenticated
+		
+		override fun onCreate(savedInstanceState: Bundle?) {
+			super.onCreate(savedInstanceState)
+			val biometricAuthenticator = BiometricAuthenticator(this)
+			
+			sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+			lightSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
+			
+			enableEdgeToEdge()
+			
+			setContent {
+				val darkTheme by isDarkTheme
+				val authenticated by isAuthenticated
+				RaptorTheme(darkTheme = darkTheme) {
+					Surface(
+					modifier = Modifier.fillMaxSize(),
+					color = MaterialTheme.colorScheme.background
+					) {
+						if (authenticated) {
+							MainScreen()
+						} else {
+							AuthenticationScreen(
+							onAuthenticate = {
+								promptBiometricAuthentication(biometricAuthenticator)
+							}
+							)
+						}
+					}
+				}
+			}
+		}
+		
+		private fun promptBiometricAuthentication(biometricAuthenticator: BiometricAuthenticator) {
+			biometricAuthenticator.PromptBiometricAuth(
+			title = "Authentication Required",
+			subtitle = "Please authenticate to proceed",
+			negativeButtonText = "Cancel",
+			fragmentActivity = this,
+			onSuccess = {
+				runOnUiThread {
+					_isAuthenticated.value = true
+				}
+			},
+			onFailed = {
+			},
+			onError = { errorCode, errorString ->
+			}
+			)
+		}
+		
+		override fun onResume() {
+			super.onResume()
+			lightSensor?.let { sensor ->
+				sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+			}
+		}
+		
+		override fun onPause() {
+			super.onPause()
+			sensorManager.unregisterListener(this)
+		}
+		
+		override fun onSensorChanged(event: SensorEvent?) {
+			if (event?.sensor?.type == Sensor.TYPE_LIGHT) {
+				val lightLevel = event.values[0]
+				val maxLightLevel = lightSensor?.maximumRange ?: 10000f
+				
+				_isDarkTheme.value = lightLevel < 0.4 * maxLightLevel
+			}
+		}
+		
+		override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+		}
+	}
+\end{lstlisting}
+
+Na listingu \ref{lst:LightSensorMain} przedstawiona jest funkcja MainScreen. W wierszu 2 mamy SensorEventListener, który jest frameworkiem w androidzie który pozwala aplikacji na reagowanie na zmiany odczytywane przez czujniki smartfona. Po dodaniu automatycznie tworzone są funkcje onSensorChanged, onResume, onPause, onAccuracyChanged.
+Implementację sensora zaczynamy od utworzenia zmiennych sensormanager oraz lightSensor w wierszach 3 i 4. Zmienna sensormanager odpowiedzialna jest za pobranie menadżera czujników z poziomu systemu.
+Zmienna \texttt{lightSensor} odpowiedzialna jest za uzyskanie referencji do głównego czujnika urządzenia, jeżeli się nie uda to zwraca wartość null.
+Zmienna \texttt{\_isdarkTheme} w wierszu 5 określa czy aplikacja wykorzystuje obecnie tryb ciemny, zmienna \texttt{isDarkTheme} w wierszu 6 pomaga jej w tym za pomocą odczytu w UI.
+\\
+W \texttt{SetContent} w wierszu 23 do dynamicznej zmiany kolorów wykorzytywane jest "RaptorTheme(darkTheme = darmTheme)" zdefiniowany w \texttt{Theme.kt} w folderze \texttt{ui.Theme}.
+\\
+Poniżej, w wierszach od 60 do 65 znajduje się funkcja \texttt{onResume}, która rejestruje słuchacza zdarzeń po wznowieniu działania aplikacji. odpowiedzialne jest za częstotliwość aktualizacji(\texttt{SENSOR\_DELAY\_NORMAL}).
+\\
+This oznacza implementację \texttt{SensorEventListener}.
+\\
+Funkcja \texttt{onpause} odpowiedzialna jest zatrzymanie działania słuchacza zdarzeń w przypadku pracy aplikacji w tle.
+\\
+Funkcja \texttt{onSensorChanged} wywoływana jest za każdym razem gdy uzyskany zostanie nowy odczyt z czujnika systemowego.
+Zmienna \texttt{lightLevel} pobiera aktualny poziom oświetlenią(jednosta to luks).
+Zmienna \texttt{maxLightLevel} pobiera maksymalny zakres pomiarowy czujnika. W przypadku braku przypisana zostanie wartość 10000 luksów. 
+W wierszu 77 znajduje się instrukcja przejścia w tryb ciemny jeżeli obecny wykrywany poziom światła jest mniejszy niż 40 procent.
+Funkcja \texttt{onAccuracyChanged} nie jest tutaj wykorzystywana. Może być wykorzystana do np. zmiany dokładności wykrywania czujnika.
+\\
+
+
+\subsection{Autoryzacja odciskiem palca}
+
+\subsection{Sound wave}
