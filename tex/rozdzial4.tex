@@ -152,8 +152,92 @@ Jak widać na listingu nr.~\ref{lst:LibraryDb_class}, na początku klasy należy
 
 Na linijce nr. 3 umieszczona jest faktyczna deklaracja klasy. Dziedziczy ona z klasy \texttt{RoomDatabase}. Jedyne rzeczy jakie są do dziecięcej klasy dodawane, to metody zwracające obiekty \texttt{dao}, opisane w sekcji nr.~\ref{sec:daos}.
 
-%TODO: 
 \subsubsection{Obiekty Dao} \label{sec:daos}
+
+Obiekty \texttt{dao} (Data Access Object(s)) to obiekty używane do interakcji z zawartością bazy danych. Głównie używa się ich do dodawania elementów do bazy oraz ich odczytywania. Same obiekty definiuje się jako interfejsy z adnotacja \texttt{@Dao}. Są one implementowane przez \texttt{Room}. Baza danych w projekcie wykorzystuje dwa interfejsy \texttt{dao} - \texttt{UIdao}, którego kod zamieszczony jest na listingu nr.~\ref{lst:UIDao_int} oraz \texttt{LogicDao}, którego kod zamieszczony jest na listingu nr.~\ref{lst:LogicDao_int}.
+
+\begin{lstlisting}[caption=Deklaracja interfejsu \texttt{UIdao}, label={lst:UIDao_int}, language=kotlin]
+@Dao
+interface UIDao {
+    @Query("SELECT * FROM Song")
+    fun getAllSongs(): Flow<List<Song>>
+
+    @Query("SELECT * FROM Song WHERE songId = :songId")
+    fun collectSongFromId(songId: Long): Flow<Song>
+
+    // Get an album with its songs
+    @Transaction
+    @Query("SELECT * FROM album WHERE albumId = :albumId")
+    fun getAlbumWithSongs(albumId: Long): Flow<AlbumWithSongs>
+
+    @Query("SELECT * FROM album WHERE albumId = :albumId")
+    fun getAlbumById(albumId: Long?): Flow<Album>
+
+    // Get an album with its authors
+    @Transaction
+    @Query("SELECT * FROM album WHERE albumId = :albumId")
+    fun getAlbumWithAuthors(albumId: Long?): Flow<AlbumWithAuthors?>
+
+    @Query("SELECT * FROM Author")
+    fun getAllAuthorsFlow(): Flow<List<Author>>
+
+    // Get an author with their albums
+    @Transaction
+    @Query("SELECT * FROM author WHERE name = :name")
+    fun getAuthorWithAlbums(name: String): Flow<AuthorWithAlbums>
+}
+\end{lstlisting}
+
+\begin{lstlisting}[caption=Deklaracja interfejsu \texttt{LogicDao}, label={lst:LogicDao_int}, language=kotlin]
+@Dao
+interface LogicDao {
+    @Insert
+    fun insertSong(song: Song)
+
+    @Insert
+    fun insertAlbum(album: Album): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertAuthor(author: Author)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertAlbumAuthorCrossRef(albumAuthorCrossRef: AlbumAuthorCrossRef)
+
+    @Query("SELECT * FROM Author")
+    fun getAllAuthors(): List<Author>
+
+    @Transaction
+    @Query("SELECT * FROM album WHERE albumId = :albumId")
+    fun getAlbumWithAuthors(albumId: Long): AlbumWithAuthors
+
+    @Transaction
+    @Query("SELECT * FROM author WHERE name = :name")
+    fun getAuthorWithAlbums(name: String): AuthorWithAlbums
+
+    @Query("SELECT * FROM author WHERE name = :name")
+    fun getAuthor(name: String): Author?
+
+    @Query("SELECT * FROM album WHERE title = :title")
+    fun getAlbumsByTitle(title: String): List<Album>
+
+    @Query("SELECT * FROM album WHERE title = :title LIMIT 1")
+    fun getAlbumByTitle(title: String): Album?
+
+    @Query("SELECT * FROM AlbumAuthorCrossRef WHERE albumId = :albumId AND name = :authorName LIMIT 1")
+    fun getCrossRefByAlbumAndAuthor(albumId: Long, authorName: String): AlbumAuthorCrossRef?
+
+    @Query("SELECT * FROM Song WHERE songId = :songId")
+    fun getSongfromId(songId: Long): Song
+}
+\end{lstlisting}
+
+Dlatego, że baza \texttt{Room} wymaga dostępu do elementów z innego wątku niż główny, \texttt{LogicDao} może być tylko używany w kodzie, o którym wiadomo, że nie jest wykonywany na głównym wątku. \texttt{UIdao} natomiast, służy ekskluzywnie do zwracania \texttt{Flow}ów. Większość elementów związanych z interfejsem w reszcie kodu aplikacji już korzysta z \texttt{Flow}ów, więc \texttt{dao} to łatwo jest zintegrować. 
+
+Typowy sposób w jaki dodaje się element do bazy znajduje się na linijce nr. 4 w kodzie \texttt{LogicDao}, na listingu nr.~\ref{lst:LogicDao_int}. Funkcja \texttt{insertSong()}, zadnotowana jest \texttt{@Insert}. Powiadamia to \texttt{Room}, że funkcja ta odpowiedzialna jest za dodawanie elementu. Parametr \texttt{song} to piosenka jaka ma być dodana. W następnej funkcji \texttt{insertAlbum()} widać, że funkcje \texttt{@Insert} mogą zwracać wartości. W tym przypadku funkcja zwraca \texttt{id} nowo dodanego albumu. Można też zwrócić uwagę na metodę \texttt{insertAuthor()} na linijce nr. 8, a w szczególności parametr \texttt{onConflict} w adnotacji \texttt{@Insert}. Wartość parametru \texttt{OnConflictStrategy.REPLACE} mówi bibliotece, aby nie pomijała elementów o tych samych wartościach co już są w tabeli, ale zamieniała starsze na te nowe. 
+
+Przykład odczytywania elementu jest dobrze zilustrowany na metodzie \texttt{getAuthor()} zadeklarowanej na linijce nr. 27. Adnotacja \texttt{@Query} przyjmuje parametr \texttt{String}, który jest kwerendą \texttt{SQL} jaka ma być wykonana. Kwerenda \texttt{SELECT * FROM author WHERE name = :name} wybiera wszystkich autorów, których pole \texttt{name} równe jest parametrowi metody \texttt{name} (odnoszenie do parametru w kwerendzie poprzedzone jest znakiem \enquote{\texttt{:}}). Dlatego że w bazie może być tylko jeden autor z daną nazwą, zwracany jest pojedynczy autor, a nie ich lista. Niektóre metody, jak na linijce nr. 20 \texttt{getAlbumWithAuthors()}, używają adnotacji \texttt{@Transaction}. W przypadku tej metody, zwraca ona relację, czyli czyta z kilku tabel. Adnotacja \texttt{@Transaction} zapewnia, że transakcja jest atomiczna, co za tym idzie, inne wątki nie mogą nagle zmienić wartości jakiejś tabeli.
+
+Interfejs \texttt{UIdao} działa podobnie jak \texttt{LogicDao}, ale zwraca on tylko i wyłącznie \texttt{Flow}y, które są natywnie obsługiwane przez \texttt{Room}.
 
 \subsubsection{Tabele} \label{sec:tables}
 
