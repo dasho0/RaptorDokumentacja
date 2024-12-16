@@ -72,3 +72,30 @@ Id są potrzene do utworzenia powiązań między tabelkami.
 Tabelka autorów będzie odwoływała się do tabelki albumów za pomocą id albumu. Tabelka albumów będzie odwoływała się do tabelki piosenek przy pomocy id song. Tabelka piosenek będzie posiadała odwołania do tabelek autorów i albumów za pomocą id aut i id album.
 
 \subsection{Strukutura bazy danych}
+
+\subsubsection{Ogólny opis}
+
+Baza danych jest złożona z trzech tabel:
+
+\begin{itemize}
+	\item Autorzy - tabela ta ma zawierać wszystkie informacje o autorach z biblioteki użytkownika. Założeniem jest, że każdy autor ma unikalną nazwę, ponieważ nie ma żadnego dobrego sposobu unikalnej identyfikacji autorów z samych lokalnych plików.
+
+	\item Albumy - tabela ta, oprócz katalogowania albumów, głównie pełni rolę \enquote{pośrednika} między piosenkami a autorami. Ważną informacją jaką zawiera każdy rekord, jest odnośnik do okładki danego albumu. Opisane jest to w sekcji nr.~\ref{sec:dbrelations}. Warto wspomnieć, że albumy każdego autora muszą mieć unikalne nazwy - problem identyfikacji jest podobny jak przy autorach - lecz nazwy albumów różnych autorów mogą się powtarzać. 
+	
+	\item Piosenki - tabela ta zawiera informacje o wszystkich piosenkach w bibliotece, pozyskane z tagów plików.
+\end{itemize}
+
+Detale dotyczące każdej z tabel można przeczytać w sekcji nr. \todo
+
+\subsubsection{Relacje w bazie} \label{sec:dbrelations}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=1\textwidth]{images/ch3-db-relacje.drawio.png}
+	\caption{\centering{Model relacji bazy}}
+	\label{fig:dbrelations}
+\end{figure}
+
+Na rysunku nr.~\ref{fig:dbrelations} ukazany jest uproszczony model bazy danych, biorący tylko pod uwagę komponenty potrzebne do określenia relacji. Autorzy są w relacji $M$ do $N$ z albumami. Każdy autor może mieć wiele albumów, a każdy album wiele autorów. Piosenki z albumami są w relacji $1$ do $N$. Każda piosenka może należeć wyłącznie do jednego albumu, ale każdy album może mieć wiele piosenek.
+
+Warto zauważyć, że piosenki niebezpośrednio łączą się z autorami. Jeżeli piosenka chce uzyskać swojego autora, musi zrobić to poprzez album.
