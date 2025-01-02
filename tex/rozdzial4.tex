@@ -470,4 +470,120 @@ Funkcja \texttt{onAccuracyChanged} nie jest tutaj wykorzystywana. Może być wyk
 
 \subsection{Autoryzacja odciskiem palca}
 
+Autoryzacja odciskiem palca działa w następujących krokach:
+\begin{enumerate}
+	\item Sprawdzenie, czy uwierzytelnianie biometryczne jest dostępne, przedstawione na listingu nr \ref{lst:Fingerprint-available}
+	\item Zbudowanie monitu biometrycznego, przzedstawione na listingu nr \ref{lst:Fingerprint-checkmonit}
+	\item Obsługa wyniku monitu biometrycznego, przedstawiona na listingu nr \ref{lst:Fingerprint-monitfinish}
+\end{enumerate}
+
+\begin{lstlisting}[caption=Sprawdzenie dostępności uwierzytelnienia biometrycznego, label={lst:Fingerprint-available}, language=kotlin]
+enum class BiometricAuthenticationStatus(val id: Int) {
+	READY(1),
+	NOT_AVAILABLE(-1),
+	TEMPORARY_NOT_AVAILABLE(-2),
+	AVAILABLE_BUT_NOT_ENROLLED(-3)
+}
+
+fun isBiometricAuthAvailable(): BiometricAuthenticationStatus {
+	return when (biometricmanager.canAuthenticate(BIOMETRIC_STRONG)) {
+		BiometricManager.BIOMETRIC_SUCCESS -> BiometricAuthenticationStatus.READY
+		BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> BiometricAuthenticationStatus.NOT_AVAILABLE
+		BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> BiometricAuthenticationStatus.TEMPORARY_NOT_AVAILABLE
+		BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> BiometricAuthenticationStatus.AVAILABLE_BUT_NOT_ENROLLED
+		else -> BiometricAuthenticationStatus.NOT_AVAILABLE
+	}
+}
+\end{lstlisting}
+Na zamieszczonym listingu funkcja \texttt{BiometricAuthenticationStatus} tworzy stany gotowości uwierzytelniania.
+Funkcja \texttt{isBiometricAuthAvailable} jest odpowiedzialna za sprawdzenie czzy telefon obsługuje uwierzytelnianie biometryczne oraz czy w telefonie są zapisane odciski palca. \texttt{biometricmanager.canAuthenticate(BIOMETRIC\_STRONG)} jest odpowiedzialna za zapytanie systemu, o możliwość użycia uwierzytelniania silnego biometrycznego, w zależności od odpowiedzi systemu zostanie zwrócony odpowiednio zedfiniowany status.
+
+\begin{lstlisting}[caption=Sprawdzenie monitu biometrycznego, label={lst:Fingerprint-checkmonit}, language=kotlin]
+	fun PromptBiometricAuth(
+	title: String,
+	subtitle: String,
+	negativeButtonText: String,
+	fragmentActivity: FragmentActivity,
+	onSuccess: (result: BiometricPrompt.AuthenticationResult) -> Unit,
+	onFailed: () -> Unit,
+	onError: (errorCode: Int, errorString: String) -> Unit,
+	) {
+		when(isBiometricAuthAvailable()) {
+			BiometricAuthenticationStatus.NOT_AVAILABLE -> {
+				onError(BiometricAuthenticationStatus.NOT_AVAILABLE.id,"Not available on this device")
+				return
+			}
+			BiometricAuthenticationStatus.TEMPORARY_NOT_AVAILABLE -> {
+				onError(BiometricAuthenticationStatus.TEMPORARY_NOT_AVAILABLE.id, "Not available at this moment")
+				return
+			}
+			BiometricAuthenticationStatus.AVAILABLE_BUT_NOT_ENROLLED -> {
+				onError(BiometricAuthenticationStatus.AVAILABLE_BUT_NOT_ENROLLED.id, "Add a fingerprint")
+				return
+			}
+			else -> Unit
+		}
+		biometricPrompt = BiometricPrompt(
+		fragmentActivity,
+		object: BiometricPrompt.AuthenticationCallback() {
+			override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+				super.onAuthenticationSucceeded(result)
+				onSuccess(result)
+			}
+			
+			override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+				super.onAuthenticationError(errorCode, errString)
+				onError(errorCode, errString.toString())
+			}
+			
+			override fun onAuthenticationFailed() {
+				super.onAuthenticationFailed()
+				onFailed()
+			}
+		}
+		)
+		promptinfo = BiometricPrompt.PromptInfo.Builder()
+		.setTitle(title)
+		.setSubtitle(subtitle)
+		.setNegativeButtonText(negativeButtonText)
+		.build()
+		biometricPrompt.authenticate(promptinfo)
+	}
+\end{lstlisting}
+Funkcja \texttt{PromptBiometricAuth} odpowiedzialna jest Za tworzenie monitu, który zostanie wyświetlony użytkownikowi podczas włączenia aplikacji. Monit zawiera tytuł, podtytuł oraz przycisk negatywny. Od wiersza 10 do 24 znajduje się istrukcja when któa jest odpowiedzialna za sprawdzenie dostępności uwiewrzytelniania. Następnie w wierszach od 25 do 43 tworzony jest nowy obiekt który będzie obsługiwał okno dialogowe. \texttt{object:BiometricPrompt.AuthenticationCallback()} odpowiedzialne jest za implementację metody obsługi zdarzeń związanych z uwierzytelnianiem. Jeżeli uwierzytelnianie się powiedzie to wywoływana jest metoda \texttt{onAuthenticationSucceeded}, któa przekazuje wynik jako argument do \texttt{PromptBiometricAuth}, co umożliwia odblokowanie aplikacji. \texttt{onAuthenticationError} wywoływane jest w przypadku wystąpienia błędu. \texttt{onAuthenticationFailed} jest wywoływane w przypadku niepowodzenia uwierzytelniania, np. niewłaściwy odcisk palca.
+Od wiersza 44 do 49 znajduje się prompt builder, odwpowiedzialny za skonfigurowanie danych które będą wyświetlone w monicie, na samym końcu w wierszu 49 wywołana jest metoda.
+
+\begin{lstlisting}[caption=Obsługa wyniku monitu, label={lst:Fingerprint-monitfinish}, language=kotlin]
+	private fun promptBiometricAuthentication(biometricAuthenticator: BiometricAuthenticator) {
+		biometricAuthenticator.PromptBiometricAuth(
+		title = "Authentication Required",
+		subtitle = "Please authenticate to proceed",
+		negativeButtonText = "Cancel",
+		fragmentActivity = this,
+		onSuccess = {
+			runOnUiThread {
+				_isAuthenticated.value = true
+			}
+		},
+		onFailed = {
+		},
+		onError = { errorCode, errorString ->
+		}
+		)
+	}
+\end{lstlisting}
+Funkcja w MainActivity, przekazuje dane do tworzonego monitu, w przypadku pomyślnego uwierzytelnienia, IsAuthenticated jest ustawiany jako true, dzięki czemu aplikacja wie że można opuścić ekran logowania oraz przejść do wczytywania reszty aplikacji. Fragment kodu odpowiedzialny za załądowanie ekranu uwierzytelniania przed przejściem do ekranu głównego znajduje się w \texttt{onCreate}, przedstawionym na listingu nr \ref{lst:Fingerprint-oncreate}.
+\begin{lstlisting}[caption=Zawartosć \texttt{onCreate}, label={lst:Fingerprint-oncreate}, language=kotlin]
+	if (authenticated) {
+		MainScreen()
+	} else {
+		AuthenticationScreen(
+		onAuthenticate = {
+			promptBiometricAuthentication(biometricAuthenticator)
+		}
+		)
+	}
+	
+\end{lstlisting}
+
 \subsection{Sound wave}
