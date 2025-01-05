@@ -586,4 +586,201 @@ Funkcja w MainActivity, przekazuje dane do tworzonego monitu, w przypadku pomyś
 	
 \end{lstlisting}
 
-\subsection{Sound wave}
+\subsection{Tag Extractor}
+Klasa \texttt{TagExtractor} jest odpowiedzialna za wyciąganie tagów z piosenek. Każda piosenka zawiera tagi, na które skłądają się: nazwa artysty, nazwa artystów z albumu, tytuł, data wydania, nazwa albumu, URI piosenki, URI obrazka cover. Deklaracje tych tagów pokazane są na listingu nr \ref{lst:Tag-tagdeclaration}.
+
+
+\begin{lstlisting}[caption=Deklaracja tagów, label={lst:Tag-tagdeclaration}, language=kotlin]
+	data class SongInfo(
+	val artists: List<String>?,
+	val albumArtists: List<String>?,
+	val title: String?,
+	val releaseDate: String?,
+	val album: String?,
+	val fileUri: Uri?,
+	val coverUri: Uri?,
+	)
+	
+\end{lstlisting}
+
+Metoda \texttt{buildSongInfo()} przedstawiona na listingu nr \ref{lst:Tag-buildsonginfo} jest odpowiedzialna za parsowanie metadanych. Otrzymuje 
+
+\begin{lstlisting}[caption=Metoda \texttt{buildSongInfo()}, label={lst:Tag-buildsonginfo}, language=kotlin]
+	@OptIn(UnstableApi::class)
+	private fun buildSongInfo(metadata: Metadata, uri: Uri?): SongInfo {
+		val metadataList = mutableListOf<Metadata.Entry>()
+		for(i in 0 until metadata.length()) {
+			metadataList.add(metadata.get(i))
+		}
+		Log.d("${javaClass.simpleName}", "Metadata list: $metadataList")
+		
+		when(metadataList[0]) {
+			is VorbisComment -> {
+				fun handleMissingTags(map: MutableMap<String?, Any?>) {
+					if(map["ALBUMARTIST"] == null) map["ALBUMARTIST"] = List<String>(1,{"Unknown"} )
+				}
+				
+				val entryMap: MutableMap<String?, Any?> = mutableMapOf()
+				
+				// the last element `picture` screws up the logic and it only has a mimetype value
+				// which i think is useless
+				metadataList.take(metadataList.size - 1).fastForEach {
+					val entry = it as VorbisComment
+					
+					val key = entry.key
+					val value = entry.value
+					when(key) {
+						"ALBUMARTIST", "ARTIST" -> {
+							if(!entryMap.containsKey(key)) {
+								entryMap[key] = mutableListOf<String?>(value)
+							} else {
+								(entryMap[key] as? MutableList<String?>)?.add(value)
+							}
+						}
+						
+						else -> {
+							// assert(!entryMap.containsKey(key))
+							if(entryMap.containsKey(key)) {
+								Log.w(javaClass.simpleName, "Unhandled duplicate key: $key")
+								return@fastForEach
+							}
+							entryMap[key] = value
+						}
+					}
+				}
+				
+				handleMissingTags(entryMap)
+				
+				val coverUri = imageManager.extractAlbumimage(
+				uri,
+				entryMap["ALBUMARTIST"] as List<String>,
+				entryMap["ALBUM"] as String
+				)
+				
+				return SongInfo(
+				artists = entryMap["ARTIST"] as? List<String>?,
+				albumArtists = entryMap["ALBUMARTIST"] as List<String>,
+				title = entryMap["TITLE"] as? String?,
+				album = entryMap["ALBUM"] as String?,
+				releaseDate = entryMap["DATE"] as? String?,
+				fileUri = uri,
+				trackNumber = (entryMap["TRACKNUMBER"] as? String?)?.toInt(),
+				coverUri = coverUri,
+				).also {
+					Log.d(javaClass.simpleName, "Vorbis Song: $it")
+				}
+				
+			}
+			
+			is Id3Frame -> {
+				fun handleMissingTags(map: MutableMap<String, List<String>>) {
+					if(map["TPE2"] == null) map["TPE2"] = List<String>(1,{"Unknown"} )
+				}
+				
+				val entryMap: MutableMap<String, List<String>> = mutableMapOf()
+				metadataList.fastForEach {
+					val entry = it as Id3Frame
+					Log.d(javaClass.simpleName, "Id3 metadata: $entry")
+					
+					when(entry) {
+						is TextInformationFrame -> {
+							entryMap[entry.id] = entry.values
+						}
+						
+						else -> {
+							Log.w(javaClass.simpleName, "Unimplemented id3 frame: $entry")
+						}
+					}
+				}
+				
+				handleMissingTags(entryMap)
+				
+				val coverUri = imageManager.extractAlbumimage(
+				uri,
+				entryMap["TPE2"]?: emptyList(),
+				entryMap["TALB"]?.get(0).toString()
+				
+				)
+				
+				return SongInfo(
+				artists = entryMap["TPE1"],
+				albumArtists = entryMap["TPE2"] as List<String>,
+				title = entryMap["TIT2"]?.get(0),
+				releaseDate = entryMap["TDA"]?.get(0),
+				album = entryMap["TALB"]?.get(0),
+				fileUri = uri,
+				trackNumber = entryMap["TRCK"]?.get(0)?.let {
+					return@let it.takeWhile { it != '/' }.toInt()
+				},
+				coverUri = coverUri
+				).also {
+					Log.d(javaClass.simpleName, "id3 Song: $it")
+				}
+			}
+			
+			else -> {
+				metadataList.fastForEach {
+					Log.w(
+					javaClass.simpleName,
+					"Unhendled tag format: ${it::class.simpleName}, metadata: $it"
+					)
+				}
+				
+				return SongInfo(
+				null, mutableListOf("Unknown"), null, null, null, null, null, null
+				)
+			}
+		}
+	}
+\end{lstlisting}
+
+Instrukcje w wierszach od 3 do 6 odpowiedzialne są za tworzenie listy metadanych. Następuje inicjalizacja pustej lsity \texttt{metadataList}. Następnie pętla przeszukuje po metadata.length, następnie dodaje każdy wpis do listy.
+W wierszach od 9 do	120 znajduje się pętla while, odpowiedzialna za warunkowe sprawdzanie formatu danych. Instrukcja składa się z tzech części: \texttt{VorbisComment}, \texttt{Id3Frame} oraz \texttt{else}.
+\begin{enumerate}
+	\item \texttt{VorbisComment} znajdujące się w wierszach od 10 do 65 odpowiedzialne jest za parsowanie gdy mamy do czynienia z formatem metadanych typu Vorbis.
+	Funkcja \texttt{handleMissingTags()} w wierszach od 11 do 13 jest odpowiedzialna za wypełnienie brakujących pól domyślnymi wartościami. Następnie w wierszach od 15 do 42 tworzona jest mapa wejścia oraz parsowanie.
+	W wierszach od 44 do 50 następuje wywołanie funkcji uzupełniającej brakujące tagi oraz ekstrakcja coveru piosenki. Wyodrębnia wbudowany w plik audio cover oraz zapisuje go do pliku w pamięci aplikacji.
+	W wierszach od 52 do 63 tworzony jest obiekt SongInfo.
+	
+	\item \texttt{Id3Frame} znajduje się w wierszach od 67 do 111. Odpowiedzialne za parsowanie gdy mamy do czynienia z formatem Id3Frame. Działa podobnie do poprzednika. Mamy funkcję wewnętrzną która tworzy brakujące tagi, tworzona jest mapa oraz następuje parsowanie, wywołanie funkcji tworszącej brakujące tagi oraz ekstrakcja coveru i na koniec tworzony jest obiekt SongInfo dla tego formatu.
+	
+	\item \texttt{else} znajduje się w wierszach od 113 do 124. Jest wykonywana gdy natrafimy na nieobsługiwany przez aplikację format. Ostrzeżenie jest zapisywane do logów oraz zwracane jest \texttt{SongInfo} zawierające minimalne informacje.
+\end{enumerate}
+
+Metoda \texttt{TagExtractor} przedstawiona na listingu \ref{lst:Tag-tagextractor}. Metoda jest odpowiedzialna za skanowanie plików audio przekazywanych jako lista \texttt{SongFile} oraz wyodrębnienia ich z metadanych.
+
+\begin{lstlisting}[caption=Metoda \texttt{TagExtractor()}, label={lst:Tag-tagextractor}, language=kotlin]
+	@OptIn(UnstableApi::class)
+	fun extractTags(fileList: List<MusicFileLoader.SongFile>): List<SongInfo> {
+		val tagsList = mutableListOf<SongInfo>()
+		
+		for(file in fileList) {
+			val mediaItem = MediaItem.fromUri("${file.uri}")
+
+			val trackGroups = MetadataRetriever.retrieveMetadata(context, mediaItem).get()
+			
+			if(trackGroups != null) {
+				// Parse and handle metadata
+				assert(trackGroups.length == 1)
+				
+				val tags = trackGroups[0]
+				.getFormat(0)
+				.metadata
+				.let {
+					buildSongInfo(
+					it!!,
+					file.uri
+					)
+				}
+				
+				tagsList.add(tags)
+			}
+		}
+		return tagsList
+	}
+\end{lstlisting}
+Instrukcja w wierszu 3 tworzy pustą listę do któej będą wkładane obiekty \texttt{SongInfo}.
+
+Pętla for przechodzi przez każdy plik \texttt{SongFile} oraz tworzy obiekt \texttt{MediaItem} w wierszu 6, pobiera metadane w wierszu 8, instrukcja if w wierszach od 10 do 25 jest odpowiedzialna za walidację i parsowanie, sprawdza, czy \texttt{trackGroups} nie jest null. \texttt{assert} w wierszu 12 zakłada, że metadane będą w jednym tracku. Następnie w \texttt{tags} uzysujemy dostęp do metadanych oraz parsujemy w \texttt{buildSongInfo}.
+W wierszu 24 dodajemy wynik do \texttt{tagList}.
+W wierszu 27 zwracamy \texttt{tagList}.
