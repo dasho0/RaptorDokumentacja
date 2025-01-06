@@ -784,3 +784,131 @@ Instrukcja w wierszu 3 tworzy pustą listę do któej będą wkładane obiekty \
 Pętla for przechodzi przez każdy plik \texttt{SongFile} oraz tworzy obiekt \texttt{MediaItem} w wierszu 6, pobiera metadane w wierszu 8, instrukcja if w wierszach od 10 do 25 jest odpowiedzialna za walidację i parsowanie, sprawdza, czy \texttt{trackGroups} nie jest null. \texttt{assert} w wierszu 12 zakłada, że metadane będą w jednym tracku. Następnie w \texttt{tags} uzysujemy dostęp do metadanych oraz parsujemy w \texttt{buildSongInfo}.
 W wierszu 24 dodajemy wynik do \texttt{tagList}.
 W wierszu 27 zwracamy \texttt{tagList}.
+
+\subsection{MusicFileLoader}
+Zadanie \texttt{MusicFileLoader} znalezienie wszystkich plików muzycznych z wybranego przez użytkownika folderu.
+Na listingu nr \ref{lst:mfl-fullcode}.
+
+\begin{lstlisting}[caption=Kod \texttt{MusicFileLoader}, label={lst:mfl-fullcode}, language=kotlin]
+	package com.example.raptor
+	
+	import android.content.Context
+	import android.content.Intent
+	import android.net.Uri
+	import android.provider.DocumentsContract
+	import android.util.Log
+	import androidx.activity.compose.ManagedActivityResultLauncher
+	import androidx.activity.compose.rememberLauncherForActivityResult
+	import androidx.activity.result.contract.ActivityResultContracts
+	import androidx.compose.runtime.Composable
+	import androidx.compose.ui.util.fastForEach
+	import androidx.documentfile.provider.DocumentFile
+	import dagger.hilt.android.qualifiers.ApplicationContext
+	import kotlinx.coroutines.flow.MutableStateFlow
+	import javax.inject.Inject
+	
+	/**
+	* Handles the loading of music files in a given directory and its subdirectories as well as
+	* launching a file picker instance
+	*/
+	class MusicFileLoader
+	@Inject constructor( @ApplicationContext private val context: Context) {
+		/**
+		* Dataclass representing a song file
+		*
+		* @param filename Name of the file
+		* @param uri `Uri` corresponding to the file
+		* @param mimeType The type of the file
+		*/
+		data class SongFile(val filename: String, val uri: Uri, val mimeType: String)
+		
+		/**
+		* Observable list of `SongFile` currently loaded
+		*/
+		var songFileList = MutableStateFlow<List<SongFile>>(emptyList())
+		private set
+		
+		private lateinit var launcher : ManagedActivityResultLauncher<Uri?, Uri?>
+		
+		private fun traverseDirs(treeUri: Uri): List<SongFile> {
+			val _songFiles = mutableListOf<SongFile>()
+			
+			fun visit(uri: Uri) {
+				val root = DocumentFile.fromTreeUri(context, uri)
+				Log.d(javaClass.simpleName, "Visiting dir: ${root?.name}")
+				val childDirs = root?.listFiles()?.filter { it.isDirectory }
+				
+				childDirs?.fastForEach { visit(it.uri) }
+				
+				val songFiles = root?.listFiles()
+				?.filter {
+					it.type?.slice(0..4) == "audio"
+				}
+				?.map {
+					SongFile(
+					filename = it.name.toString(),
+					uri = it.uri,
+					mimeType = it.type.toString()
+					)
+				}
+				
+				Log.d(javaClass.simpleName, "Visited dir ${root?.name}, songs: ${songFiles?.map { it
+						.filename 
+				}}")
+				
+				_songFiles.addAll(songFiles?: emptyList())
+				
+			}
+			
+			visit(treeUri)
+			
+			return _songFiles
+		}
+		
+		/**
+		* \@Composable function that prepares the file picker launcher
+		*
+		* Must be called before `launch()`
+		*/
+		@Composable
+		fun PrepareFilePicker() {
+			val contentResolver = context.contentResolver
+			
+			launcher = rememberLauncherForActivityResult(
+			contract = ActivityResultContracts.OpenDocumentTree()
+			) { treeUri: Uri? ->
+				treeUri?.let {
+					val permissions = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+					Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+					contentResolver.takePersistableUriPermission(treeUri, permissions)
+					
+					Log.d(javaClass.simpleName, "Selected: $it")
+					songFileList.value = traverseDirs(treeUri)
+				}
+			}
+		}
+		
+		/**
+		* Launches the file picker
+		*/
+		fun launch() {
+			launcher.launch(null)
+		}
+	}
+\end{lstlisting}
+Na początku znajduje się klasa danych \texttt{SongFile} w wierszu 31. Służy do przechowywania informacji o pojedynczym pliku audio.
+W wierszach 36 i 37 jest zmienna \texttt{songFileList}, służącą do przechowywania listy obiektów \texttt{SongFile}.
+W wierszu 39 znajduje się zmienna \texttt{launcher}, któy zwraca uri folderu wybranego przez użytkownika.
+Funkcja \texttt{TraverseDirs} w wierszach od 41 do 74 jest odpowiedzialna za rekurencyjne przeszukiwanie folderu określonego przez \texttt{treeUri}. Zbiera wszystkie pliki audio znajdujące się w tym folderze.
+Najpierw tworzona jest lista \texttt{\_songFiles} która będze przechowywać wyniki. następnie tworzona jest funkcja wewnętrzna \texttt{visit} która wywołuje obiekt reprezentujący wybrany folder, następnie pliki są listowane oraz oddzielane od folderu. Następnie rekurencyjnie wywołujemy dla każdego katalogu \texttt{visit(it.uri)}. Następnie w bieżącym katalogu filtrowane są pliki w wiwerszach od 52 do 54. Następnie z każdego pliku tworzony jest obiekt \texttt{SongFile} a następnie dołączany do \texttt{\_SongFiles}.
+Na koniec zwracane jest \texttt{\_SongFiles}.
+Następnie znajduje się funkcja \texttt{PrepareFilePicker} w wierszach od 82 do 97. Funkcja jest odpowiedzialna za przygotowanie launchera.
+\texttt{rememberLauncherForActivityResult} 
+pozwala na stworzenie obiektu launchera który pozwoli na otwarice \texttt{OpenDocumentTree}.
+Kontrakt \texttt{ActivityResultContracts.OpenDocumentTree()} pozwala na wybranie całego folderu. Następnie w wierszach od 88 do 96 znajdują się instrukcje definiujące uprawnienia, aby zachować uprawnienia potrzebne jest
+
+\texttt{takePersistableUriPermission()}.
+
+\texttt{songFileList.value = traverseDirs(treeUri)} służy do aktualizacji flow, URI folderu przekazywane jest do funkcji \texttt{traverseDirs}.
+
+Na koniec w wierszach od 102 do 104 znajduje się funkcja \texttt{launch}, odpowwiedzialna za uruchomienie selektora folderów.
