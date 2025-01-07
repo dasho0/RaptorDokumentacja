@@ -4,7 +4,7 @@
 
 \subsection{Ogólny zarys wymagań}
 
-Celem programu jest pełnienie funkcji odtwarzacza muzyki oraz dodatkowo ma on pełnić rolę dyktafonu. Program będzie mógł skanować dany folder, a w nim tagi zawartych plików muzycznych i tworzyć na jego podstawie graficzną reprezentację biblioteki. 
+Celem programu jest pełnienie funkcji odtwarzacza muzyki. Program będzie mógł skanować dany folder i jego podfoldery, a w nich zawarty pliki muzyczne i tworzyć na ich podstawie bibliotekę, zapisaną na dysku.  
 
 \subsection{Wykorzystane czujniki}
 
@@ -13,12 +13,14 @@ Program ma na celu wykorzystanie trzech czujników, z którymi użytkownik będz
 \begin{itemize}
 	\item Żyroskop - Interfejs programu będzie się zmieniał w zależności od orientacji urządzenia. 
 	
-	\item Mikrofon - Program będzie posiadał funkcję nagrywania dźwięku. Nagrane pliki będzie można odtwarzać w odtwarzaczu
+	\item Wykrywacz odcisków palca - dostęp do programu powinien być ograniczony dla użytkowników mogących zweryfikować swój odcisk.
 
 	\item Czujnik światła - Interfejs programu będzie mógł zmieniać swoje kolory w zależności od wykrytego poziomu światła na czujniku
 \end{itemize}
 
 \subsection{Zarys interfejsu}
+
+\todo{Zmienić mockup widoku artystów. Dodać topbar i dać pola tekstowe w kafelki}
 
 \begin{figure}[H]
 	\centering
@@ -27,7 +29,7 @@ Program ma na celu wykorzystanie trzech czujników, z którymi użytkownik będz
 	\label{fig:mockup2artysta}
 \end{figure}
 
-Widok wykonawców, jest przedstawiony na rysunku 1.1. Ten widok będzie ekranem startowym aplikacji. "Kafelki" będa zdjęciami wykonawców. Klikanie na jeden z nich przejdzie do widoku albumów danego wykonawcy
+Widok wykonawców, jest przedstawiony na rysunku nr.~\ref{fig:mockup2artysta}. Ten widok będzie ekranem startowym aplikacji. Jako "Kafelki", zwracać będzie się dokument do ułożonych równomiernie na rysunku kwadratów. Na każdym z nich napisana będzie nazwa danego wykonawcy. Klikanie na jeden z nich przejdzie do widoku albumów danego wykonawcy.
 
 \begin{figure}[H]
 	\centering
@@ -36,8 +38,7 @@ Widok wykonawców, jest przedstawiony na rysunku 1.1. Ten widok będzie ekranem 
 	\label{fig:mockup2albumy}
 \end{figure}
 
-
-Widok albumów jest przedstawiony na rysunku 1.2. Widok będzie identyczny jak widok wykonawców. Jedyna różnica polega tym, że zdjęcia na kafelkach będą zdjęciami albumów.
+Widok albumów jest przedstawiony na rysunku nr.~\ref{fig:mockup2albumy}. Widok będzie podobny do widoku wykonawców. Różni się on tym, że na "kafelkach", będą pokazane zdjęcia poszczególnych albumów. Pod "kafelkami", znajdują się nazwy danych albumów.
 
 \begin{figure}[H]
 	\centering
@@ -47,8 +48,9 @@ Widok albumów jest przedstawiony na rysunku 1.2. Widok będzie identyczny jak w
 \end{figure}
 
 
-Rysunek 1.3 przedstawia okno pokazujące się po wybraniu albumu. Po wejściu na jakiś album zaprezentowane zostaną zawarte w nim utwory. W lewym górnym jest zdjęcie danego albumu, a obok niego jest kilka informacji o albumie jak wykonawca, data, tytuł. Dłuższe paski to lista tytułów piosenek, które można kliknąć, aby daną piosenkę włączyć.
+Rysunek nr.~\ref{fig:mockup2utwory} przedstawia ekran pokazujący się po wybraniu albumu. Po wejściu na jakiś album zaprezentowane zostaną zawarte w nim utwory. W lewym górnym kwadrat to zdjęcie danego albumu, a obok niego jest kilka informacji o albumie jak wykonawca, data, tytuł, w postaci tekstu. Dłuższe paski zawarte na dole to lista piosenek, w postaci przycisków z napisanymi, tytułami które można kliknąć, aby daną piosenkę włączyć.
 
+\todo{To trzeba całe zmienić na nowe}
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=1\linewidth]{images/mockup2_odtwarzacz}
@@ -56,16 +58,4 @@ Rysunek 1.3 przedstawia okno pokazujące się po wybraniu albumu. Po wejściu na
 	\label{fig:mockup2odtwarzacz}
 \end{figure}
 
-
-Wygląd interfejsu odtwarzacza został zaprezentowany na rysunku 1.4. Odtwarzacz będzie działał następująco: duże koło będzie stylizowane na płytę, gdzie wypełniona ona będzie obrazem albumu. Płyta ta będzie się kręcić w czasie gdy gra piosenka. Kąt płyty (od 0\degree, do 360\degree) będzie określał jak duża część piosenki została odtworzona. Kąt ten będzie określony jeszcze niezdefiniowanym efektem graficznym. Prostokąty wokół płyty to tytuł piosenki, a na dole czas grania. Kółko i wokół niego trójkąty to przyciski odtwarzania - graj/pauza, następny, poprzedni.
-
-\begin{figure}[H]
-	\centering
-	\includegraphics[width=1\linewidth]{images/mockup2_dyktafon}
-	\caption{\centering{Mockup dyktafonu}}
-	\label{fig:mockup2dyktafon}
-\end{figure}
-
-
-Na rysunku 1.5 zaprezentowany został interfejs dyktafonu.
-Do dyktafonu będzie można się dostać przesuwając palcem w prawo na ekranie wykonawców. Dyktafon jest aktywowany wielkim okrągłym przyciskiem. Te kreski obok niego to wizualizacja dźwięku z mikrofonu. Menu w rogu będzie pozwalało na m.in. skonfigurowanie folderu zapisu nagrań.
+Wygląd interfejsu odtwarzacza został zaprezentowany na rysunku nr.\ref{fig:mockup2odtwarzacz}. Odtwarzacz będzie działał następująco: duże koło będzie stylizowane na płytę, gdzie wypełniona ona będzie obrazem albumu. Płyta ta będzie się kręcić w czasie gdy gra piosenka. Kąt płyty (od 0\degree, do 360\degree) będzie określał jak duża część piosenki została odtworzona. Kąt ten będzie określony jeszcze niezdefiniowanym efektem graficznym. Prostokąty wokół płyty to tytuł piosenki, a na dole czas grania. Kółko i wokół niego trójkąty to przyciski odtwarzania - graj/pauza, następny, poprzedni.
