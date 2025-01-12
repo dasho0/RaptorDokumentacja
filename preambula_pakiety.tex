@@ -69,6 +69,13 @@ sorting=none
 \usepackage{listings}
 \usepackage{xcolor}
 
+\usepackage{calc} % używane dla tego jednego \renewcommand
+\usepackage[export]{adjustbox} % żeby się duże zdj nie clipowały
+\let\oldincludegraphics\includegraphics
+\renewcommand{\includegraphics}[2][]{%
+  \oldincludegraphics[#1,max size={\textwidth}{\textheight - 1.5cm}]{#2}%
+}
+
 \definecolor{codegreen}{rgb}{0,0.6,0}
 \definecolor{codegray}{rgb}{0.5,0.5,0.5}
 \definecolor{codepurple}{rgb}{0.58,0,0.82}
