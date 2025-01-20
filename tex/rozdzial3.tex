@@ -14,20 +14,20 @@ Głównym celem programu jest odtwarzanie muzyki.
 Program składa się z trzech okien.
 
 \begin{itemize}
-	\item Okno wyboru autora - AuthorsView()
-	\item Okno wyboru albumu - AuthorView()
-	\item Okno wyboru utworów - SongView()
+	\item Okno wyboru autora
+	\item Okno wyboru albumu
+	\item Okno wyboru utworów
 \end{itemize}
 
 Aplikacja włączając się wyświetla menu wyboru autora. Menu przedstawione jest w postaci kafelkowej.
 
 Po wybraniu autora włączane jest menu wyboru albumu.
 
-Po wybraniu albumu otwirane jest menu wyboru piosenek należących do tego utworu.
+Po wybraniu albumu otwierane jest menu wyboru piosenek należących do tego utworu.
 
 \subsection{Odczyt i przetwarzanie plików}
 
-\subsection{Strukutura bazy danych}
+\subsection{Struktura bazy danych}
 
 \subsubsection{Ogólny opis}
 
@@ -51,7 +51,7 @@ Detale dotyczące każdej z tabel można przeczytać w sekcji nr.~\ref{sec:dbta
 	\item \textbf{nazwa} - unikalna nazwa autora, jest zarazem kluczem głównym
 \end{itemize}
 
-\paragraph{Albumy}
+\paragraph{Albumy} \label{sec:dbalbums}
 
 \begin{itemize}
 	\item \textbf{id} - klucz główny, unikatowy identyfikator albumu
@@ -95,3 +95,11 @@ Celem czujnika jest wykrywanie intensywności światła i na podstawie tej inten
 
 \subsection{Uwierzytelnianie biometrią}
 Aplikacja będzie wykorzystywać sensor biometryczny odcisku palca do autoryzacji użytkownika. Przed wejściem do aplikacji, zostanie wywołany ekran uwierzytelniania udostępniony przez system, na tym ekranie będzie okienko na którym będzie znajdowało się miejsce, gdzie będzie można przyłożyć palec. Aplikacja będzie sprawdzać czy odcisk palca znajduje się zapisany na telefonie i będzie wykorzystywać ten odcisk do uwierzytelniania.rozdzial3
+
+\subsection{Ładowanie obrazów albumów}
+
+Większość plików muzycznych ma przypisany sobie obraz. Obraz ten w praktycznie każdym przypadku jest miniaturką albumu do którego dana piosenka należy. Aplikacja powinna w odpowiednich miejscach je wyświetlać.
+
+Dlatego, że miniaturki mają być dostępne w wielu miejscach w aplikacji, należałoby umieścić odnośniki do nich w bazie danych, konkretnie w tabeli dotyczącej albumów (patrz sekcja nr.~\ref{sec:dbalbums}) - logicznie, jeżeli miniaturka danego albumu jest dostępna, będzie używana w wielu podobnych kontekstach gdzie używane są same informacje o albumie. 
+
+Pozostaje kwestia faktycznego pozyskiwania obrazów z pliku. Proces ten odbędzie się podczas etapu ładowania tagów, po załadowaniu faktycznych plików, ale przed załadowaniem informacji do bazy. Miniaturki zostaną wyciągnięte z plików, i zostaną one włożone do głównego katalogu aplikacji jako bitmapy. Przechowywanie miniaturek jako osobne pliki pozwala na łatwiejsze ich pozyskiwanie podczas dalszego działania aplikacji.
