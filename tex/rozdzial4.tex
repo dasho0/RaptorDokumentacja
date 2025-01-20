@@ -358,7 +358,7 @@ data class AuthorWithAlbums(
 
 Na listingu nr.~\ref{lst:AlbumWithAuthors_class} przedstawiona jest klasa \texttt{AlbumWithAuthors}. Definiuje ona relację danego albumu z jego autorami. Dlatego, że relacja jest $M$ do $N$, w adnotacji \texttt{@Relation} dodane jest odniesienie do tabeli relacji \texttt{AlbumAuthorCrossRef}, opisanej w sekcji nr. ~\ref{sec:AlbumAuthorCrossRef}. Klucze, jakie mają być porównywane są zdefiniowane w parametrach \texttt{parentColumn}, dla \texttt{id} albumu i \texttt{entityColumn} dla nazwy autora. Wynikiem tej relacji jest lista albumów. Sytuacja wygląda podobnie w \texttt{AuthorWithAlbums}, na listingu nr.~\ref{lst:AuthorWithAlbums_class}. Tym razem to autor jest rodzicem i oczekujemy od relacji listy albumów danego autora.
 
-\subsububsection{Czujnik światła}
+\subsection{Czujnik światła}
 Czujnik światła został zaimplementowany za pomocą wbudowanej funkcji. Zadaniem czujnika jest dynmiczna zmiana schematu kolorów aplikacji na podstawie danych otrzymanych z czujnika światła wbudowanego w urządzeniu mobilnym z systemem android.
 
 \begin{lstlisting}[caption=Implementacja czujnika światłą w \texttt{MainActivity.kt}, label={lst:LightSensorMain}, language=kotlin]
