@@ -14,20 +14,20 @@ Głównym celem programu jest odtwarzanie muzyki.
 Program składa się z trzech okien.
 
 \begin{itemize}
-	\item Okno wyboru autora
-	\item Okno wyboru albumu
-	\item Okno wyboru utworów
+	\item Okno wyboru autora - AuthorsView()
+	\item Okno wyboru albumu - AuthorView()
+	\item Okno wyboru utworów - SongView()
 \end{itemize}
 
 Aplikacja włączając się wyświetla menu wyboru autora. Menu przedstawione jest w postaci kafelkowej.
 
 Po wybraniu autora włączane jest menu wyboru albumu.
 
-Po wybraniu albumu otwierane jest menu wyboru piosenek należących do tego utworu.
+Po wybraniu albumu otwirane jest menu wyboru piosenek należących do tego utworu.
 
 \subsection{Odczyt i przetwarzanie plików}
 
-\subsection{Struktura bazy danych}
+\subsection{Strukutura bazy danych}
 
 \subsubsection{Ogólny opis}
 
@@ -51,7 +51,7 @@ Detale dotyczące każdej z tabel można przeczytać w sekcji nr.~\ref{sec:dbta
 	\item \textbf{nazwa} - unikalna nazwa autora, jest zarazem kluczem głównym
 \end{itemize}
 
-\paragraph{Albumy} \label{sec:dbalbums}
+\paragraph{Albumy}
 
 \begin{itemize}
 	\item \textbf{id} - klucz główny, unikatowy identyfikator albumu
@@ -94,12 +94,36 @@ Zadanie czujnika światła jest dość proste i niezbyt skomplikowane.
 Celem czujnika jest wykrywanie intensywności światła i na podstawie tej intensywności aktualizacja wyglądu menu poprzez wykorzystanie schematów kolorów oraz motywów. Założenie jest takie, że przy intensywności światła mniejszej niż 50 procent z 10000 lumenów aplikacja będzie przełączać się na tryb ciemny, przy intensywności większej niż 50 procent aplikacja będzie przełączać się na tryb jasny.
 
 \subsection{Uwierzytelnianie biometrią}
-Aplikacja będzie wykorzystywać sensor biometryczny odcisku palca do autoryzacji użytkownika. Przed wejściem do aplikacji, zostanie wywołany ekran uwierzytelniania udostępniony przez system, na tym ekranie będzie okienko na którym będzie znajdowało się miejsce, gdzie będzie można przyłożyć palec. Aplikacja będzie sprawdzać czy odcisk palca znajduje się zapisany na telefonie i będzie wykorzystywać ten odcisk do uwierzytelniania.rozdzial3
+Aplikacja będzie wykorzystywać sensor biometryczny odcisku palca do autoryzacji użytkownika. Przed wejściem do aplikacji, zostanie wywołany ekran uwierzytelniania udostępniony przez system, na tym ekranie będzie okienko na którym będzie znajdowało się miejsce, gdzie będzie można przyłożyć palec. Aplikacja będzie sprawdzać czy odcisk palca znajduje się zapisany na telefonie i będzie wykorzystywać ten odcisk do uwierzytelniania.
 
-\subsection{Ładowanie obrazów albumów}
+\subsection{ViewModel}
 
-Większość plików muzycznych ma przypisany sobie obraz. Obraz ten w praktycznie każdym przypadku jest miniaturką albumu do którego dana piosenka należy. Aplikacja powinna w odpowiednich miejscach je wyświetlać.
+ViewModel jest komponentem architektury, który ma za zadanie zarządzanie danymi i zapewnienie ich przetrwania w przypadku zmian konfiguracji, takich jak rotacja ekranu. Oddziela logikę biznesową i dane od interfejsu użytkownika, co upraszcza zarządzanie cyklem życia aktywności lub fragmentów. Dzięki temu ViewModel przechowuje dane nawet wtedy, gdy zostaną one ponownie utworzone.\\
 
-Dlatego, że miniaturki mają być dostępne w wielu miejscach w aplikacji, należałoby umieścić odnośniki do nich w bazie danych, konkretnie w tabeli dotyczącej albumów (patrz sekcja nr.~\ref{sec:dbalbums}) - logicznie, jeżeli miniaturka danego albumu jest dostępna, będzie używana w wielu podobnych kontekstach gdzie używane są same informacje o albumie. 
 
-Pozostaje kwestia faktycznego pozyskiwania obrazów z pliku. Proces ten odbędzie się podczas etapu ładowania tagów, po załadowaniu faktycznych plików, ale przed załadowaniem informacji do bazy. Miniaturki zostaną wyciągnięte z plików, i zostaną one włożone do głównego katalogu aplikacji jako bitmapy. Przechowywanie miniaturek jako osobne pliki pozwala na łatwiejsze ich pozyskiwanie podczas dalszego działania aplikacji.
+Dzięki przeniesieniu logiki biznesowej do ViewModel, aktywność czy fragment nie muszą się martwić o przechowywanie stanu danych. ViewModel jest częścią Android Architecture Components, co umożliwia reakcję na zmiany danych i aktualizację UI w sposób zautomatyzowany.
+
+\subsection{NavHost}
+
+NavHost jest komponentem Androida używanym do nawigacji w aplikacjach. Działa jako kontener, w którym przechowywane są fragmenty aplikacji, między którymi aplikacja może nawigować. NavHost nie tylko przechowuje aktualny stan nawigacji, ale także zarządza przejściami i ich animacjami między fragmentami.
+
+\subsubsection{Główne właściwości NavHost}
+\begin{itemize}
+    \item \textbf{Przechowywanie nawigacji}: NavHost trzyma aktualny stan nawigacji, który jest określony przez bieżący NavController.
+    \item \textbf{Dynamiczna nawigacja}: Pozwala użytkownikom na dynamiczną nawigację między różnymi ekranami aplikacji, a także zarządza animacjami przejść.
+    \item \textbf{Integracja z NavController}: NavHost pracuje razem z NavController, który kontroluje nawigację między fragmentami i zapobiega ręcznej manipulacji fragmentami bezpośrednio w kodzie.
+    \item \textbf{Łatwy dostęp w XML}: Można łatwo definiować NavHost w pliku układu XML aplikacji, co ułatwia jego konfigurację i zarządzanie.
+\end{itemize}
+
+\subsubsection{Rodzaje NavHost}
+\begin{itemize}
+    \item \textbf{NavHostFragment}: Jest to specjalna implementacja Fragment, która hostuje inne fragmenty do nawigacji.
+    \item \textbf{BottomNavigationView}: Może być zintegrowany z NavHost w celu obsługi nawigacji w aplikacjach z dolnym paskiem nawigacyjnym.
+    \item \textbf{DrawerLayout}: Może być używany z NavHost w aplikacjach, które mają menu nawigacyjne dostępne z boku ekranu.
+\end{itemize}
+
+\subsubsection{Kluczowe komponenty związane z NavHost}
+\begin{itemize}
+    \item \textbf{NavController}: Centralny obiekt, który zarządza wszystkimi aspektami nawigacji w danym NavHost. Używa się go do przeprowadzania przejść między fragmentami oraz zachowywaniu historii nawigacji.
+    \item \textbf{NavGraph}: Jest to definicja struktury nawigacji, która określa wszystkie cele nawigacyjne oraz dostępne akcje między nimi.
+\end{itemize}
