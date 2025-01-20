@@ -2051,3 +2051,142 @@ Na początku klasy, do konstruktora, wstrzykiwana jest zależność \texttt{cont
 Metoda \texttt{extractAlbumimage()} zadeklarowana na linijce nr. 2, odpowiedzialna jest za wyciąganie miniaturki albumu z pliku i umieszczanie jej w katalogu głównym aplikacji. Parametr \texttt{uri} to odnośnik do danego pliku muzycznego. Parametry \texttt{artistNames} i \texttt{albumName} to respektywnie lista nazw autorów danej piosenki i nazwa albumu. Dwa ostatnie parametry będą potrzebne do nazwania danej miniaturki później w metodzie. Na początku metody, czyli linijce nr. 7, tworzony jest obiekt \texttt{MediaMetadataRetriever} i przypisany do zmiennej \texttt{retriever}. Klasa ta służy do wyciągania informacji z plików muzycznych. W tym przypadku pozwoli ona wyciągnąć miniaturkę w danym pliku zawartą. Na linijce nr. 9, ustawiane jest źródło dla \texttt{retirevera} jako parametr \texttt{uri}. Następnie, tworzona jest  zmienna \texttt{pictureBytes}, do której przypisywane są surowe bajty tworzące miniaturkę. Zmienna \texttt{bitmapFile} reprezentuje instancję pliku do jakiego ma być zapisany bitmap. Struktura nazwy pliku to \texttt{<nazwa\_artysty1;nazwa\_artysty2...>;<nazwa\_albumu>}. Następnie, \texttt{pictureBytes} jest zapisywane do pliku \texttt{bitmapFile}. Na końcu funkcji, na linijce nr. 20, zwalniane jest miejsce potrzebne na \texttt{retrievera} i na linijce nr. 22 zwracane jest \texttt{uri} \texttt{bitmapFile}.
 
 Druga metoda w klasie to \texttt{getBitmapFromAppStorage()}, zadeklarowana na linijce nr. 25. Ma ona na celu wczytanie miniaturki z pamięci aplikacji, nie z pliku muzycznego. Parametr \texttt{uri} to odnośnik do pliku z miniaturką. Na linijce nr. 27 sprawdzane jest czy parametru \texttt{uri} istnieje. Jeżeli tak to otwierany jest plik przy pomocy \texttt{uri}, używając \texttt{API} \texttt{contentResolver}. Używając zwróconego przez niego strumienia, tworzony jest bitmap, który jest konwertowany do klasy \texttt{ImageBitmap}, używanej bezpośrednio przez \texttt{Compose}. Jeżeli \texttt{uri} nie istnieje, zostaje zwracany placeholderowy \texttt{ImageBitmap}, jak widać na linijce nr. 37.
+
+\subsection{Audio player}
+Logika audio player znajduje się w pliku AudioPlayer.kt.
+Działanie rozpoczyna od inicjalizacji ExoPlayer przedstawionej na listingu nr \ref{lst:player-exoinit}.
+\begin{lstlisting}[caption=Inicjalizacja exoplayer, label={lst:player-exoinit}, language=kotlin]
+	class AudioPlayer @Inject constructor(@ApplicationContext context: Context) {
+		private val player = ExoPlayer.Builder(context).build().apply {
+			setAudioAttributes(
+			AudioAttributes.Builder()
+			.setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+			.setUsage(C.USAGE_MEDIA)
+			.build(),
+			true
+			)
+		}
+	\end{lstlisting}
+	setAudioAttributes ustawia atrybuty odtwarzania audio a ExoPlayer.Builder tworzy nową instancję odtwarzacza.
+	Następnie w kodzie znajduje się funkcja \texttt{updateListeners}, przedstawiona na listing nr \ref{lst:player-update}.
+	Funkcja jest odpowiedzialna za zarządzanie stanem odtwarzania, używa obserwowanego stanu odtwarzacza \texttt{playbackState} i słuchacza, aby reagować na zmiany w stanie odtwarzania.
+	\begin{lstlisting}[caption=Zarządzanie stanem, label={lst:player-update}, language=kotlin]
+		private fun updateListeners(song: Song) {
+			if(currentSong == song) {
+				return
+			}
+			
+			currentSong = song
+			
+			player.addListener(
+			object: Player.Listener {
+				override fun onIsPlayingChanged(isPlaying: Boolean) {
+					Log.d(AudioPlayer::class.simpleName, if (isPlaying) "player is playing $song"
+					else "player is not playing")
+					
+					// TODO: this feels hacky... maybe this callback should be remove alltogether
+					if(
+					player.playbackState == ExoPlayer.STATE_ENDED ||
+					player.playbackState == ExoPlayer.STATE_BUFFERING
+					) {
+						return
+					}
+					
+					playbackState.value = if(isPlaying)
+					PlaybackStates.STATE_PLAYING else PlaybackStates.STATE_PAUSED
+					Log.d(AudioPlayer::class.simpleName, "Playback: ${playbackState
+						.value.name}")
+				}
+				
+				override fun onPlaybackStateChanged(playbackState: Int) {
+					when(playbackState) {
+						Player.STATE_BUFFERING -> {
+							Log.d(AudioPlayer::class.simpleName, "Playback: ${
+								PlaybackStates
+								.STATE_BUFFERING}")
+							this@AudioPlayer.playbackState.value = PlaybackStates.STATE_BUFFERING
+						}
+						
+						Player.STATE_ENDED -> {
+							Log.d(AudioPlayer::class.simpleName, "Playback: ${
+								PlaybackStates
+								.STATE_ENDED.name}")
+							this@AudioPlayer.playbackState.value = PlaybackStates.STATE_ENDED
+						}
+						
+						Player.STATE_IDLE -> {
+							Log.d(AudioPlayer::class.simpleName, "Playback: ${
+								PlaybackStates
+								.STATE_IDLE.name}")
+							this@AudioPlayer.playbackState.value = PlaybackStates.STATE_IDLE
+						}
+						
+						Player.STATE_READY -> {
+							Log.d(AudioPlayer::class.simpleName, "Playback: ${
+								PlaybackStates
+								.STATE_READY.name}")
+							this@AudioPlayer.playbackState.value = PlaybackStates.STATE_READY
+						}
+					}
+				}
+			}
+			)
+		}
+	\end{lstlisting}
+	Funkcja wewnętrzna \texttt{onIsPlayingChanged} jest odpowiedzialna za wykrywanie czy odtwarzacz gra oraz aktulaizowanie stanu. Funkcja \texttt{onPlaybackStateChanged} jest odpowiedzialna za reagowanie na zmiany stanu exoplayera.
+	\texttt{playbackState} przechowuje stan.
+	Następnie jest funkcja \texttt{playSong} odpowiedzialna za ustawienie pliku audio do odtwarzania oraz rozpoczęcie odtwarzania, przedstawiona na listingu nr \ref{lst:player-playsong}.
+	\begin{lstlisting}[caption=Funkcja playsong, label={lst:player-playsong}, language=kotlin]
+		fun playSong(song: Song) {
+			assert(isPlayingInternal == false)
+			assert(!player.isPlaying)
+			assert(playbackState.value != PlaybackStates.STATE_PLAYING)
+			Log.d(javaClass.simpleName, "calling playSong")
+			
+			Log.d(AudioPlayer::class.simpleName, "Song uri: ${song.fileUri}")
+			
+			updateListeners(song)
+			
+			if(player.currentMediaItem.hashCode() != MediaItem.fromUri(song.fileUri!!.toUri())
+			.hashCode()) { //FIXME: we ball
+				player.apply {
+					setMediaItem(MediaItem.fromUri(song.fileUri.toUri()))
+					prepare()
+				}
+				
+				Log.d(javaClass.simpleName, "playSong(), songs don't match")
+			}
+			
+			player.play()
+			
+		}
+	\end{lstlisting}
+	\texttt{MediaItem.fromUr} tworzy element multimedialny z URI pliku audio. \texttt{setMediaItem} ustawia element multimedialny do odtwarzania. \texttt{prepare} przygotowuje odtwarzacz do odtwarzania. \texttt{play} rozpoczyna odtwarzanie.
+	Funkcje \texttt{pause} oraz \texttt{restartCurrentPlayback} przedstawione na listingu nr \ref{lst:player-pausecurr} odpowiedzialne są za pauzowanie oraz ponownym odtwarzaniem.
+	\begin{lstlisting}[caption=Funkcje pausei restartCurrentPlayuback, label={lst:player-pausecurr}, language=kotlin]
+		fun restartCurrentPlayback() {
+			player.seekTo(0)
+			player.play()
+		}
+		fun pause() {
+			assert(playbackState.value == PlaybackStates.STATE_PLAYING)
+			assert(isPlayingInternal)
+			
+			Log.d(javaClass.simpleName, "calling pause")
+			player.pause()
+			
+		}
+	\end{lstlisting}
+	Funkcja \texttt{changeCurrentPosition} przedstawiona na listingu nr \ref{lst:player-position} odpowiedzialna jest za zmanę aktualnej pozycji odtwarzania.
+	\begin{lstlisting}[caption=Funkcja zmainy pozycji, label={lst:player-position}, language=kotlin]
+		fun changeCurrentPosition(time: Long) {
+			player.seekTo(time)
+		}
+	\end{lstlisting}
+	\texttt{seekTo} przenosi odtwarzacz do konkretnego miejsca.
+	Na samym końcu znajduje się funkcja \texttt{releasePlayer} która jest odpowiedzialna za czyszczenie pamięci, przedstawiona jest na listingu nr \ref{lst:player-release}
+	\begin{lstlisting}[caption=Funkcja czyszczenia pamięci, label={lst:player-release}, language=kotlin]
+		fun releasePlayer() {
+			player.release()
+		}
+	\end{lstlisting}
