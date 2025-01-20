@@ -1080,3 +1080,974 @@ fun LandscapeView(selectedAlbum: Pair<Album, ImageBitmap>, navController: NavHos
 }    
 \end{lstlisting}
 W tych dwóch funkcjach znajdują się elementy ogólnie używane przez wszystkie ekrany pozwalająć na ich wielofunkcyjność, pochodzącą z potrzeby wywoływanie tylko ich części.
+=======
+	\newpage
+\section{Implementacja}		%4
+%Wkleić szkielet kodu, wraz z komentarzami. Opisać zmienne, struktury do czego służą. Opisać procedury, metody co wykonują. Opisać nowe zdefiniowane klasy. Opisać dziedziczenie. Opisać nowo utworzone pliki za co odpowiadają.
+
+\subsection{Zarządzanie bazą danych}
+
+\subsubsection{Klasa \texttt{DatabaseManager}} \label{sec:DatabaseManager}
+
+Za zarządzanie bazą danych odpowiedzialna jest klasa \texttt{DatabaseManager}, której kod jest zamieszony na listingu nr. \ref{lst:DatabaseManager_struct}. Klasa jest wrapperem do bazy danych \texttt{Room}\cite{doc_room} i do niej akcesorów.
+
+\begin{lstlisting}[caption=Strukutura klasy \texttt{DatabaseManager}, label={lst:DatabaseManager_struct}, language=kotlin]
+@Singleton
+class DatabaseManager @Inject constructor(
+    @ApplicationContext context: Context
+) {
+    private val database: LibraryDb = Room.databaseBuilder(
+        context,
+        LibraryDb::class.java, "Library"
+    ).build()
+
+    fun collectAuthorsFlow(): Flow<List<Author>> = database.uiDao().getAllAuthorsFlow()
+
+    fun collectAlbumsByAuthorFlow(authorName: String): Flow<List<Album>> {
+        return database.uiDao().getAuthorWithAlbums(authorName)
+            .map { it.albums }
+    }
+
+    fun collectSongsByAlbumFlow(albumId: Long): Flow<List<Song>> {
+        return database.uiDao().getAlbumWithSongs(albumId)
+            .map { it.songs }
+    }
+	
+...
+
+    fun populateDatabase(songs: List<TagExtractor.SongInfo>) {
+        assert(Thread.currentThread().name != "main")
+
+        val dao = database.logicDao()
+
+        fun addAuthors() {
+            songs.fastForEach { song ->
+                //TODO: there should be a distinction between albumartists and regular artists
+                song.albumArtists?.fastForEach { name ->
+                    if(dao.getAuthor(name) == null) {
+                        dao.insertAuthor(Author(name = name))
+                    }
+
+                }
+            }
+        }
+
+        fun addAlbumsAndRelations() {
+            // FIXME: xdddddddd
+            val distinctAlbumArtistsList = songs
+                .map { Triple(it.album, it.albumArtists, it.coverUri) }
+                .distinct()
+            Log.d(javaClass.simpleName, "Distinct artists set: $distinctAlbumArtistsList")
+
+            distinctAlbumArtistsList.fastForEach {
+                val albumTitle = it.first.toString()
+                val artists = it.second
+                val coverUri = it.third
+
+                val albumId = dao.insertAlbum(Album(
+                    title = albumTitle,
+                    coverUri = coverUri.toString(),
+                ))
+
+                artists?.fastForEach {
+                    dao.insertAlbumAuthorCrossRef(AlbumAuthorCrossRef(
+                        albumId = albumId,
+                        name = it.toString()
+                    ))
+                }
+            }
+        }
+
+        fun addSongs() {
+            songs.fastForEach { song ->
+                Log.d(javaClass.simpleName, "NEW SONG\n")
+                Log.d(javaClass.simpleName, "Album artists: ${song.albumArtists}")
+
+                val albumWithAuthorCandidates = dao
+                    .getAlbumsByTitle(song.album.toString())
+                    .map { it.albumId }
+                    .map { dao.getAlbumWithAuthors(it) }
+                Log.d(javaClass.simpleName, "$albumWithAuthorCandidates")
+
+                var correctAlbum: Album? = null
+                albumWithAuthorCandidates.fastForEach {
+                    Log.d(javaClass.simpleName, "${song.albumArtists}, ${it.authors}")
+                    //FIXME: theese guys shouldn't be ordered, will have to refactor a bunch of
+                    // stuff with sets instead of lists
+                    if(song.albumArtists?.sorted() == it.authors.map { it.name }.sorted()) {
+                        correctAlbum = it.album
+                    }
+                }
+
+                dao.insertSong(Song(
+                    title = song.title,
+                    albumId = correctAlbum?.albumId,
+                    fileUri = song.fileUri.toString(),
+                ))
+            }
+        }
+
+        addAuthors()
+        addAlbumsAndRelations()
+        addSongs()
+    }
+}
+\end{lstlisting}
+
+% TODO: opisac co to hilt
+Na pierwszej linijce można zauważyć adnotację \texttt{@Singleton}. Pochodzi ona z bilbioteki \texttt{Hilt}\cite{doc_hilt}. Powiadamia ona bibliotekę o tym że klasa jest singletonem, czyli że ma istnieć tylko jej jedna instancja na cały program. Uczyniono to, dlatego że baza danych powinna być jedna na całą aplikację. Menadżer z nią interfejsujący, dlatego że jest używany w wielu innych klasach, też powinien mieć tylko jedną instancję, aby nie marnować pamięci.
+
+Na linijce nr. 2, widać konstruktor klasy, do którego też przy użyciu \texttt{Hilt}, wstrzykiwany jest \texttt{context}.
+
+Następnie, na linijce nr. 5, widać inicjalizację samego obiektu bazy \texttt{database}. Baza jest reprezentowana przez klasę \texttt{LibraryDb}, definicję której można zobaczyć w sekcji \ref{sec:LibraryDb}
+
+% TODO: opisac co to flow albo w 2 chapterze albo 3
+Dalej, do linijki nr. 22 pokazane są metody zwracające rózne elementy bazy. Wiekszosc z tych metod zwraca \texttt{Flow}\cite{TODO:}. \texttt{Room} natywnie obsługuje \texttt{Flowy}, a dlatego że wymusza dostęp do bazy z innych wątków niż główny, większość operacji wykonywanych na bazie odbywa się za pośrednictwem typów \texttt{Flow}
+
+Same metody są wrapperami do obiektów \texttt{Dao} bazy. Więcej o nich w sekcji \ref{sec:daos}. Niektóre obrabiają dane jak np. \texttt{collectSongsByAlbumFlow()} na linijce nr. 17., która mapuje zwraca piosenki z wyjściowej klasy relacyjnej.
+
+Metod tych jest więcej, lecz wyglądają one bardzo podobnie. Dla zwięzłości, mozna je pominąć.
+
+%TODO: TagExtractor.SongInfo to będzie po prostu SongInfo jak sie mi zeche w kodzie zmienic
+Metoda \texttt{populateDatabase()} zadeklarowana na linijce nr. 24, jest odpowiedzialna za ładowanie wyjętych z plików informacji do bazy. Jako parametr odstaje ona zmienną \texttt{songs} typu \texttt{List<TagExtractor.SongInfo>}   Zadeklarowane są w niej trzy funkcje pomocnicze: \texttt{addAuthors()}, \texttt{addAlbumsAndRelations()} i \texttt{addSongs()}. Wywoływane są one po kolei w metodzie głównej.
+
+Funkcja \texttt{addAuthors()}, zadeklarowana na linijce nr. 29, jest prosta w swoim działaniu. Lista z \texttt{SongInfo} jest iterowana i po kolei wpisywani są wszyscy autorzy, którzy jeszcze w bazie nie istnieją.
+
+Funkcja \texttt{addAlbumsAndRelations()}, zadeklarowana na linijce nr. 41, odpowiada za dodawanie albumów do bazy oraz tworzenie relacji między nimi, a autorami. Tworzona zmienna \texttt{distinctAlbumArtistsList} mapuje tylko unikalne pary albumów i autorów (zmienna \texttt{coverUri} nie ma znaczenia przy określaniu autorstwa, jest przypisywana tutaj dlatego, że trudno było znaleźć dla niej lepsze miejsce). Dzięki temu początkowemu filtrowaniu, wiadomo, że każdy napotkany album będzie unikalny. Następnie, \texttt{distinctAlbumArtistsList} jest iterowana - przy każdej iteracji dodawany jest nowy album do bazy. Metoda \texttt{insertAlbum()} zwraca \texttt{id} nowo dodanego albumu. Wynik jej jest przypisywany do zmiennej \texttt{albumId} na linijce nr. 53. Potem, zostaje przypisywana relacja albumu z autorami. Autorów może być kilku, więc są oni reprezentowani przy każdej iteracji przez listę, która jest iterowana, a relacja zostaje dodawana z nazwą autora i \texttt{albumId}.
+
+Funkcja \texttt{addSongs()}, zadeklarowana na linijce nr. 67, ma na celu dodanie piosenek do bazy. Ciało funkcji jest w pętli iterującej się przez listę piosenek. Na początku pętli, na linijce nr. 72 deklarowana jest zmienna \texttt{albumWithAuthorCandidates}. Jest ona listą relacji album - autorzy wszystkich albumów o tej samej nazwie co ten w danym elemencie listy. Następnie, lista ta jest iterowana i przy każdej iteracji sprawdzane jest czy lista autorów w danej relacji jest równa z listą autorów danej piosenki. Jeżeli tak, wartość danego albumu z wybranej relacji jest przypisywana do zmiennej zadeklarowanej na lini nr. 78 \texttt{correctAlbum}. Na końcu funkcji, piosenka dodana jest do bazy przy użyciu metody \texttt{dao}.
+
+\subsubsection{Klasa LibraryDb} \label{sec:LibraryDb}
+
+Klasa \texttt{LibraryDb} jest deklaracją faktycznej instancji bazy danych, która jest implementowana i generowana przez bibliotekę \texttt{Room}. Z racji tego, że jest to klasa abstrakcyjna, jej zadaniem jest określenie struktury bazy i jakie komponenty ma ona zawierać
+
+\begin{lstlisting}[caption=Deklaracja bazy LibraryDb, label={lst:LibraryDb_class}, language=kotlin]
+@Database(entities = [Song::class, Author::class, Album::class, AlbumAuthorCrossRef::class], version
+= 1)
+abstract class LibraryDb : RoomDatabase() {
+    abstract fun logicDao(): LogicDao
+    abstract fun uiDao(): UIDao
+}
+
+\end{lstlisting}
+
+Jak widać na listingu nr.~\ref{lst:LibraryDb_class}, na początku klasy należy zamieścić adnotację \texttt{@Database}. Powiadamia ona bibliotekę \texttt{Room} o tym, że następująca klasa jest bazą danych. Parametr \texttt{entities} określa wszystkie tabele jakie mają się w klasie zawierać. O tabelach więcej w sekcji nr.~\ref{sec:tables}. Parametr \texttt{version} zajmuje się wersjonowaniem bazy. Jest on ważny przy aktualizacjach aplikacji, aby baza mogła zostać odpowiednio zmieniona. 
+
+Na linijce nr. 3 umieszczona jest faktyczna deklaracja klasy. Dziedziczy ona z klasy \texttt{RoomDatabase}. Jedyne rzeczy jakie są do dziecięcej klasy dodawane, to metody zwracające obiekty \texttt{dao}, opisane w sekcji nr.~\ref{sec:daos}.
+
+\subsubsection{Obiekty Dao} \label{sec:daos}
+
+Obiekty \texttt{dao} (Data Access Object(s)) to obiekty używane do interakcji z zawartością bazy danych. Głównie używa się ich do dodawania elementów do bazy oraz ich odczytywania. Same obiekty definiuje się jako interfejsy z adnotacja \texttt{@Dao}. Są one implementowane przez \texttt{Room}. Baza danych w projekcie wykorzystuje dwa interfejsy \texttt{dao} - \texttt{UIdao}, którego kod zamieszczony jest na listingu nr.~\ref{lst:UIDao_int} oraz \texttt{LogicDao}, którego kod zamieszczony jest na listingu nr.~\ref{lst:LogicDao_int}.
+
+\begin{lstlisting}[caption=Deklaracja interfejsu \texttt{UIdao}, label={lst:UIDao_int}, language=kotlin]
+@Dao
+interface UIDao {
+    @Query("SELECT * FROM Song")
+    fun getAllSongs(): Flow<List<Song>>
+
+    @Query("SELECT * FROM Song WHERE songId = :songId")
+    fun collectSongFromId(songId: Long): Flow<Song>
+
+    // Get an album with its songs
+    @Transaction
+    @Query("SELECT * FROM album WHERE albumId = :albumId")
+    fun getAlbumWithSongs(albumId: Long): Flow<AlbumWithSongs>
+
+    @Query("SELECT * FROM album WHERE albumId = :albumId")
+    fun getAlbumById(albumId: Long?): Flow<Album>
+
+    // Get an album with its authors
+    @Transaction
+    @Query("SELECT * FROM album WHERE albumId = :albumId")
+    fun getAlbumWithAuthors(albumId: Long?): Flow<AlbumWithAuthors?>
+
+    @Query("SELECT * FROM Author")
+    fun getAllAuthorsFlow(): Flow<List<Author>>
+
+    // Get an author with their albums
+    @Transaction
+    @Query("SELECT * FROM author WHERE name = :name")
+    fun getAuthorWithAlbums(name: String): Flow<AuthorWithAlbums>
+}
+\end{lstlisting}
+
+\begin{lstlisting}[caption=Deklaracja interfejsu \texttt{LogicDao}, label={lst:LogicDao_int}, language=kotlin]
+@Dao
+interface LogicDao {
+    @Insert
+    fun insertSong(song: Song)
+
+    @Insert
+    fun insertAlbum(album: Album): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertAuthor(author: Author)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertAlbumAuthorCrossRef(albumAuthorCrossRef: AlbumAuthorCrossRef)
+
+    @Query("SELECT * FROM Author")
+    fun getAllAuthors(): List<Author>
+
+    @Transaction
+    @Query("SELECT * FROM album WHERE albumId = :albumId")
+    fun getAlbumWithAuthors(albumId: Long): AlbumWithAuthors
+
+    @Transaction
+    @Query("SELECT * FROM author WHERE name = :name")
+    fun getAuthorWithAlbums(name: String): AuthorWithAlbums
+
+    @Query("SELECT * FROM author WHERE name = :name")
+    fun getAuthor(name: String): Author?
+
+    @Query("SELECT * FROM album WHERE title = :title")
+    fun getAlbumsByTitle(title: String): List<Album>
+
+    @Query("SELECT * FROM album WHERE title = :title LIMIT 1")
+    fun getAlbumByTitle(title: String): Album?
+
+    @Query("SELECT * FROM AlbumAuthorCrossRef WHERE albumId = :albumId AND name = :authorName LIMIT 1")
+    fun getCrossRefByAlbumAndAuthor(albumId: Long, authorName: String): AlbumAuthorCrossRef?
+
+    @Query("SELECT * FROM Song WHERE songId = :songId")
+    fun getSongfromId(songId: Long): Song
+}
+\end{lstlisting}
+
+Dlatego, że baza \texttt{Room} wymaga dostępu do elementów z innego wątku niż główny, \texttt{LogicDao} może być tylko używany w kodzie, o którym wiadomo, że nie jest wykonywany na głównym wątku. \texttt{UIdao} natomiast, służy ekskluzywnie do zwracania \texttt{Flow}ów. Większość elementów związanych z interfejsem w reszcie kodu aplikacji już korzysta z \texttt{Flow}ów, więc \texttt{dao} to łatwo jest zintegrować. 
+
+Typowy sposób w jaki dodaje się element do bazy znajduje się na linijce nr. 4 w kodzie \texttt{LogicDao}, na listingu nr.~\ref{lst:LogicDao_int}. Funkcja \texttt{insertSong()}, zadnotowana jest \texttt{@Insert}. Powiadamia to \texttt{Room}, że funkcja ta odpowiedzialna jest za dodawanie elementu. Parametr \texttt{song} to piosenka jaka ma być dodana. W następnej funkcji \texttt{insertAlbum()} widać, że funkcje \texttt{@Insert} mogą zwracać wartości. W tym przypadku funkcja zwraca \texttt{id} nowo dodanego albumu. Można też zwrócić uwagę na metodę \texttt{insertAuthor()} na linijce nr. 8, a w szczególności parametr \texttt{onConflict} w adnotacji \texttt{@Insert}. Wartość parametru \texttt{OnConflictStrategy.REPLACE} mówi bibliotece, aby nie pomijała elementów o tych samych wartościach co już są w tabeli, ale zamieniała starsze na te nowe. 
+
+Przykład odczytywania elementu jest dobrze zilustrowany na metodzie \texttt{getAuthor()} zadeklarowanej na linijce nr. 27. Adnotacja \texttt{@Query} przyjmuje parametr \texttt{String}, który jest kwerendą \texttt{SQL} jaka ma być wykonana. Kwerenda \texttt{SELECT * FROM author WHERE name = :name} wybiera wszystkich autorów, których pole \texttt{name} równe jest parametrowi metody \texttt{name} (odnoszenie do parametru w kwerendzie poprzedzone jest znakiem \enquote{\texttt{:}}). Dlatego że w bazie może być tylko jeden autor z daną nazwą, zwracany jest pojedynczy autor, a nie ich lista. Niektóre metody, jak na linijce nr. 20 \texttt{getAlbumWithAuthors()}, używają adnotacji \texttt{@Transaction}. W przypadku tej metody, zwraca ona relację, czyli czyta z kilku tabel. Adnotacja \texttt{@Transaction} zapewnia, że transakcja jest atomiczna, co za tym idzie, inne wątki nie mogą nagle zmienić wartości jakiejś tabeli.
+
+Interfejs \texttt{UIdao} działa podobnie jak \texttt{LogicDao}, ale zwraca on tylko i wyłącznie \texttt{Flow}y, które są natywnie obsługiwane przez \texttt{Room}.
+
+\subsubsection{Tabele} \label{sec:tables}
+
+W bibliotece \texttt{Room}, każda tabela to \texttt{dataclass} określana adnotacją \texttt{@Entity}. Kolumny takiej tabeli to po prostu pola klasy. Klucz danej tabeli jest określany adnotacją \texttt{@PrimaryKey}
+
+\paragraph{Author}
+
+\begin{lstlisting}[caption=Deklaracja tabeli Author, label={lst:Author_class}, language=kotlin]
+@Entity
+data class Author (
+    @PrimaryKey val name: String
+)
+\end{lstlisting}
+
+Tabela \texttt{Author}, zawarta na listingu nr.~\ref{lst:Author_class}, określa autorów. Tabela jest prosta, jedynym polem jest \texttt{name}, który jest kluczem.
+
+\paragraph{Album}
+
+\begin{lstlisting}[caption=Deklaracja tabeli Album, label={lst:Album_class}, language=kotlin]
+@Entity
+data class Album(
+    @PrimaryKey(autoGenerate = true) val albumId: Long = 0,
+    val title: String,
+    val coverUri: String?,
+)
+\end{lstlisting}
+
+Tabela \texttt{Album}, zawarta na listingu nr.~\ref{lst:Album_class}, określa albumy. Kluczem jest zmienna \texttt{albumId}. Klucz jest generowany automatycznie, dzięki parametrowi adnotacji \texttt{autoGenerate}. Pole \texttt{title} określa tytuł, a pole \texttt{coverUri} określa adres \texttt{URI} okładki.
+
+\paragraph{Song}
+
+\begin{lstlisting}[caption=Deklaracja tabeli Song, label={lst:Song_class}, language=kotlin]
+
+@Entity(
+    foreignKeys = [
+        ForeignKey(
+            entity = Album::class,
+            parentColumns = ["albumId"],
+            childColumns = ["albumId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+
+    indices = [Index(value = ["albumId"])]
+)
+data class Song(
+    @PrimaryKey(autoGenerate = true) val songId: Long = 0,
+    val title: String?,
+    val albumId: Long?,
+    val fileUri: String?,
+)
+
+\end{lstlisting}
+
+Klasa ta, zawarta na listingu nr.~\ref{lst:Song_class}, określa tabelę piosenek. Pole \texttt{foreignKeys} w adnotacji \texttt{@Entity} określa obce klucze, którymi posługuje się klasa. W tym przypadku określone jest to, że pole w \texttt{Song} \texttt{albumId} wskazuje na pole w \texttt{Album} \texttt{albumId} Pole \texttt{indices} każe indeksować pola z \texttt{albumId} ku polepszeniu szybkości bazy. W ciele klasy, pole \texttt{title} to tytuł piosenki. Pole \texttt{albumId} określa ID albumu, do którego należy dana piosenka. 
+
+\subsubsection{Relacje} \label{sec:relations}
+
+Relacje w Room są określane jako osobne \texttt{dataclassy}. Są one zadeklarowane adnotacją \texttt{@Relation} w danej klasie. Ponadto umieszczenie elementu w adnotacji \texttt{@Embedded}, pozwala klasie \enquote{przyswoić} pola danego elementu. Dzięki temu klasa może odnosić się do pól danego elementu tak jakby były one bezpośrednio w klasie. Konieczne jest umieszczenie elementu głównego, od którego będzie relacja wychodziła, do tej adnotacji.
+
+\paragraph{AlbumWithSongs} \label{sec:albumwithsongs} \
+
+Klasa \texttt{AlbumWithSongs} na listingu nr.~\ref{lst:AlbumWithSongs_class}, określa relację albumów i piosenek. 
+
+\begin{lstlisting}[caption=Deklaracja relacji \texttt{AlbumWithSongs}, label={lst:AlbumWithSongs_class}, language=kotlin]
+data class AlbumWithSongs(
+    @Embedded val album: Album,
+    @Relation(
+        parentColumn = "albumId",
+        entityColumn = "albumId"
+    )
+    val songs: List<Song>
+)
+\end{lstlisting}
+
+Relacja łączy pole \texttt{albumId} albumu z polem \texttt{albumId} piosenek. Pole \texttt{songs} zawiera wszystkie piosenki z tą samą wartością pola \texttt{albumId} co faktyczny klucz danego albumu.
+
+\paragraph{AlbumAuthorCrossRef} \label{sec:AlbumAuthorCrossRef}
+
+\begin{lstlisting}[caption=Deklaracja tabeli relacji \texttt{AlbumAuthorCrossRef}, label={lst:AlbumAuthorCrossRef_class}, language=kotlin]
+@Entity(primaryKeys = ["albumId", "name"])
+data class AlbumAuthorCrossRef(
+    val albumId: Long,
+    val name: String
+)
+
+\end{lstlisting}
+
+Tabela na listingu nr.~\ref{lst:AlbumAuthorCrossRef_class} określa relację $M$ do $N$ między albumami a autorami. Jest to tabela z dwoma kluczami głównymi: \texttt{albumId} dla tabeli \texttt{Album} i \texttt{name} dla tabeli \texttt{Author}.
+
+\paragraph{AlbumWithAuthors i AuthorWithAlbums} \
+
+Obie klasy są do siebie bardzo podobne więc zostaną omówione razem. 
+
+\begin{lstlisting}[caption=Deklaracja relacji \texttt{AlbumWithAuthors}, label={lst:AlbumWithAuthors_class}, language=kotlin]
+data class AlbumWithAuthors(
+    @Embedded val album: Album,
+    @Relation(
+        parentColumn = "albumId",
+        entityColumn = "name",
+        associateBy = Junction(AlbumAuthorCrossRef::class)
+    )
+    val authors: List<Author>
+)
+\end{lstlisting}
+
+\begin{lstlisting}[caption=Deklaracja relacji \texttt{AuthorWithAlbums}, label={lst:AuthorWithAlbums_class}, language=kotlin]
+data class AuthorWithAlbums(
+    @Embedded val author: Author,
+    @Relation(
+        parentColumn = "name",
+        entityColumn = "albumId",
+        associateBy = Junction(AlbumAuthorCrossRef::class)
+    )
+    val albums: List<Album>
+)
+\end{lstlisting}
+
+Na listingu nr.~\ref{lst:AlbumWithAuthors_class} przedstawiona jest klasa \texttt{AlbumWithAuthors}. Definiuje ona relację danego albumu z jego autorami. Dlatego, że relacja jest $M$ do $N$, w adnotacji \texttt{@Relation} dodane jest odniesienie do tabeli relacji \texttt{AlbumAuthorCrossRef}, opisanej w sekcji nr. ~\ref{sec:AlbumAuthorCrossRef}. Klucze, jakie mają być porównywane są zdefiniowane w parametrach \texttt{parentColumn}, dla \texttt{id} albumu i \texttt{entityColumn} dla nazwy autora. Wynikiem tej relacji jest lista albumów. Sytuacja wygląda podobnie w \texttt{AuthorWithAlbums}, na listingu nr.~\ref{lst:AuthorWithAlbums_class}. Tym razem to autor jest rodzicem i oczekujemy od relacji listy albumów danego autora.
+
+\subsection{Czujnik światła}
+Czujnik światła został zaimplementowany za pomocą wbudowanej funkcji. Zadaniem czujnika jest dynmiczna zmiana schematu kolorów aplikacji na podstawie danych otrzymanych z czujnika światła wbudowanego w urządzeniu mobilnym z systemem android.
+
+\begin{lstlisting}[caption=Implementacja czujnika światłą w \texttt{MainActivity.kt}, label={lst:LightSensorMain}, language=kotlin]
+	@AndroidEntryPoint
+	class MainActivity : FragmentActivity(), SensorEventListener {
+		private lateinit var sensorManager: SensorManager
+		private var lightSensor: Sensor? = null
+		private val _isDarkTheme = mutableStateOf(false)
+		private val isDarkTheme: State<Boolean> = _isDarkTheme
+		
+		private val _isAuthenticated = mutableStateOf(false)
+		private val isAuthenticated: State<Boolean> = _isAuthenticated
+		
+		override fun onCreate(savedInstanceState: Bundle?) {
+			super.onCreate(savedInstanceState)
+			val biometricAuthenticator = BiometricAuthenticator(this)
+			
+			sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+			lightSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
+			
+			enableEdgeToEdge()
+			
+			setContent {
+				val darkTheme by isDarkTheme
+				val authenticated by isAuthenticated
+				RaptorTheme(darkTheme = darkTheme) {
+					Surface(
+					modifier = Modifier.fillMaxSize(),
+					color = MaterialTheme.colorScheme.background
+					) {
+						if (authenticated) {
+							MainScreen()
+						} else {
+							AuthenticationScreen(
+							onAuthenticate = {
+								promptBiometricAuthentication(biometricAuthenticator)
+							}
+							)
+						}
+					}
+				}
+			}
+		}
+		
+		private fun promptBiometricAuthentication(biometricAuthenticator: BiometricAuthenticator) {
+			biometricAuthenticator.PromptBiometricAuth(
+			title = "Authentication Required",
+			subtitle = "Please authenticate to proceed",
+			negativeButtonText = "Cancel",
+			fragmentActivity = this,
+			onSuccess = {
+				runOnUiThread {
+					_isAuthenticated.value = true
+				}
+			},
+			onFailed = {
+			},
+			onError = { errorCode, errorString ->
+			}
+			)
+		}
+		
+		override fun onResume() {
+			super.onResume()
+			lightSensor?.let { sensor ->
+				sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+			}
+		}
+		
+		override fun onPause() {
+			super.onPause()
+			sensorManager.unregisterListener(this)
+		}
+		
+		override fun onSensorChanged(event: SensorEvent?) {
+			if (event?.sensor?.type == Sensor.TYPE_LIGHT) {
+				val lightLevel = event.values[0]
+				val maxLightLevel = lightSensor?.maximumRange ?: 10000f
+				
+				_isDarkTheme.value = lightLevel < 0.4 * maxLightLevel
+			}
+		}
+		
+		override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+		}
+	}
+\end{lstlisting}
+
+Na listingu \ref{lst:LightSensorMain} przedstawiona jest funkcja MainScreen. W wierszu 2 mamy SensorEventListener, który jest frameworkiem w androidzie który pozwala aplikacji na reagowanie na zmiany odczytywane przez czujniki smartfona. Po dodaniu automatycznie tworzone są funkcje onSensorChanged, onResume, onPause, onAccuracyChanged.
+Implementację sensora zaczynamy od utworzenia zmiennych sensormanager oraz lightSensor w wierszach 3 i 4. Zmienna sensormanager odpowiedzialna jest za pobranie menadżera czujników z poziomu systemu.
+Zmienna \texttt{lightSensor} odpowiedzialna jest za uzyskanie referencji do głównego czujnika urządzenia, jeżeli się nie uda to zwraca wartość null.
+Zmienna \texttt{\_isdarkTheme} w wierszu 5 określa czy aplikacja wykorzystuje obecnie tryb ciemny, zmienna \texttt{isDarkTheme} w wierszu 6 pomaga jej w tym za pomocą odczytu w UI.
+\\
+W \texttt{SetContent} w wierszu 23 do dynamicznej zmiany kolorów wykorzytywane jest "RaptorTheme(darkTheme = darmTheme)" zdefiniowany w \texttt{Theme.kt} w folderze \texttt{ui.Theme}.
+\\
+Poniżej, w wierszach od 60 do 65 znajduje się funkcja \texttt{onResume}, która rejestruje słuchacza zdarzeń po wznowieniu działania aplikacji. odpowiedzialne jest za częstotliwość aktualizacji(\texttt{SENSOR\_DELAY\_NORMAL}).
+\\
+This oznacza implementację \texttt{SensorEventListener}.
+\\
+Funkcja \texttt{onpause} odpowiedzialna jest zatrzymanie działania słuchacza zdarzeń w przypadku pracy aplikacji w tle.
+\\
+Funkcja \texttt{onSensorChanged} wywoływana jest za każdym razem gdy uzyskany zostanie nowy odczyt z czujnika systemowego.
+Zmienna \texttt{lightLevel} pobiera aktualny poziom oświetlenią(jednosta to luks).
+Zmienna \texttt{maxLightLevel} pobiera maksymalny zakres pomiarowy czujnika. W przypadku braku przypisana zostanie wartość 10000 luksów. 
+W wierszu 77 znajduje się instrukcja przejścia w tryb ciemny jeżeli obecny wykrywany poziom światła jest mniejszy niż 40 procent.
+Funkcja \texttt{onAccuracyChanged} nie jest tutaj wykorzystywana. Może być wykorzystana do np. zmiany dokładności wykrywania czujnika.
+\\
+
+
+\subsection{Autoryzacja odciskiem palca}
+
+Autoryzacja odciskiem palca działa w następujących krokach:
+\begin{enumerate}
+	\item Sprawdzenie, czy uwierzytelnianie biometryczne jest dostępne, przedstawione na listingu nr \ref{lst:Fingerprint-available}
+	\item Zbudowanie monitu biometrycznego, przzedstawione na listingu nr \ref{lst:Fingerprint-checkmonit}
+	\item Obsługa wyniku monitu biometrycznego, przedstawiona na listingu nr \ref{lst:Fingerprint-monitfinish}
+\end{enumerate}
+
+\begin{lstlisting}[caption=Sprawdzenie dostępności uwierzytelnienia biometrycznego, label={lst:Fingerprint-available}, language=kotlin]
+enum class BiometricAuthenticationStatus(val id: Int) {
+	READY(1),
+	NOT_AVAILABLE(-1),
+	TEMPORARY_NOT_AVAILABLE(-2),
+	AVAILABLE_BUT_NOT_ENROLLED(-3)
+}
+
+fun isBiometricAuthAvailable(): BiometricAuthenticationStatus {
+	return when (biometricmanager.canAuthenticate(BIOMETRIC_STRONG)) {
+		BiometricManager.BIOMETRIC_SUCCESS -> BiometricAuthenticationStatus.READY
+		BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> BiometricAuthenticationStatus.NOT_AVAILABLE
+		BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> BiometricAuthenticationStatus.TEMPORARY_NOT_AVAILABLE
+		BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> BiometricAuthenticationStatus.AVAILABLE_BUT_NOT_ENROLLED
+		else -> BiometricAuthenticationStatus.NOT_AVAILABLE
+	}
+}
+\end{lstlisting}
+Na zamieszczonym listingu funkcja \texttt{BiometricAuthenticationStatus} tworzy stany gotowości uwierzytelniania.
+Funkcja \texttt{isBiometricAuthAvailable} jest odpowiedzialna za sprawdzenie czzy telefon obsługuje uwierzytelnianie biometryczne oraz czy w telefonie są zapisane odciski palca. \texttt{biometricmanager.canAuthenticate(BIOMETRIC\_STRONG)} jest odpowiedzialna za zapytanie systemu, o możliwość użycia uwierzytelniania silnego biometrycznego, w zależności od odpowiedzi systemu zostanie zwrócony odpowiednio zedfiniowany status.
+
+\begin{lstlisting}[caption=Sprawdzenie monitu biometrycznego, label={lst:Fingerprint-checkmonit}, language=kotlin]
+	fun PromptBiometricAuth(
+	title: String,
+	subtitle: String,
+	negativeButtonText: String,
+	fragmentActivity: FragmentActivity,
+	onSuccess: (result: BiometricPrompt.AuthenticationResult) -> Unit,
+	onFailed: () -> Unit,
+	onError: (errorCode: Int, errorString: String) -> Unit,
+	) {
+		when(isBiometricAuthAvailable()) {
+			BiometricAuthenticationStatus.NOT_AVAILABLE -> {
+				onError(BiometricAuthenticationStatus.NOT_AVAILABLE.id,"Not available on this device")
+				return
+			}
+			BiometricAuthenticationStatus.TEMPORARY_NOT_AVAILABLE -> {
+				onError(BiometricAuthenticationStatus.TEMPORARY_NOT_AVAILABLE.id, "Not available at this moment")
+				return
+			}
+			BiometricAuthenticationStatus.AVAILABLE_BUT_NOT_ENROLLED -> {
+				onError(BiometricAuthenticationStatus.AVAILABLE_BUT_NOT_ENROLLED.id, "Add a fingerprint")
+				return
+			}
+			else -> Unit
+		}
+		biometricPrompt = BiometricPrompt(
+		fragmentActivity,
+		object: BiometricPrompt.AuthenticationCallback() {
+			override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+				super.onAuthenticationSucceeded(result)
+				onSuccess(result)
+			}
+			
+			override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+				super.onAuthenticationError(errorCode, errString)
+				onError(errorCode, errString.toString())
+			}
+			
+			override fun onAuthenticationFailed() {
+				super.onAuthenticationFailed()
+				onFailed()
+			}
+		}
+		)
+		promptinfo = BiometricPrompt.PromptInfo.Builder()
+		.setTitle(title)
+		.setSubtitle(subtitle)
+		.setNegativeButtonText(negativeButtonText)
+		.build()
+		biometricPrompt.authenticate(promptinfo)
+	}
+\end{lstlisting}
+Funkcja \texttt{PromptBiometricAuth} odpowiedzialna jest Za tworzenie monitu, który zostanie wyświetlony użytkownikowi podczas włączenia aplikacji. Monit zawiera tytuł, podtytuł oraz przycisk negatywny. Od wiersza 10 do 24 znajduje się istrukcja when któa jest odpowiedzialna za sprawdzenie dostępności uwiewrzytelniania. Następnie w wierszach od 25 do 43 tworzony jest nowy obiekt który będzie obsługiwał okno dialogowe. \texttt{object:BiometricPrompt.AuthenticationCallback()} odpowiedzialne jest za implementację metody obsługi zdarzeń związanych z uwierzytelnianiem. Jeżeli uwierzytelnianie się powiedzie to wywoływana jest metoda \texttt{onAuthenticationSucceeded}, któa przekazuje wynik jako argument do \texttt{PromptBiometricAuth}, co umożliwia odblokowanie aplikacji. \texttt{onAuthenticationError} wywoływane jest w przypadku wystąpienia błędu. \texttt{onAuthenticationFailed} jest wywoływane w przypadku niepowodzenia uwierzytelniania, np. niewłaściwy odcisk palca.
+Od wiersza 44 do 49 znajduje się prompt builder, odwpowiedzialny za skonfigurowanie danych które będą wyświetlone w monicie, na samym końcu w wierszu 49 wywołana jest metoda.
+
+\begin{lstlisting}[caption=Obsługa wyniku monitu, label={lst:Fingerprint-monitfinish}, language=kotlin]
+	private fun promptBiometricAuthentication(biometricAuthenticator: BiometricAuthenticator) {
+		biometricAuthenticator.PromptBiometricAuth(
+		title = "Authentication Required",
+		subtitle = "Please authenticate to proceed",
+		negativeButtonText = "Cancel",
+		fragmentActivity = this,
+		onSuccess = {
+			runOnUiThread {
+				_isAuthenticated.value = true
+			}
+		},
+		onFailed = {
+		},
+		onError = { errorCode, errorString ->
+		}
+		)
+	}
+\end{lstlisting}
+Funkcja w MainActivity, przekazuje dane do tworzonego monitu, w przypadku pomyślnego uwierzytelnienia, IsAuthenticated jest ustawiany jako true, dzięki czemu aplikacja wie że można opuścić ekran logowania oraz przejść do wczytywania reszty aplikacji. Fragment kodu odpowiedzialny za załądowanie ekranu uwierzytelniania przed przejściem do ekranu głównego znajduje się w \texttt{onCreate}, przedstawionym na listingu nr \ref{lst:Fingerprint-oncreate}.
+\begin{lstlisting}[caption=Zawartosć \texttt{onCreate}, label={lst:Fingerprint-oncreate}, language=kotlin]
+	if (authenticated) {
+		MainScreen()
+	} else {
+		AuthenticationScreen(
+		onAuthenticate = {
+			promptBiometricAuthentication(biometricAuthenticator)
+		}
+		)
+	}
+	
+\end{lstlisting}
+
+\subsection{Odczyt i przetwarzanie plików}
+
+\subsubsection{Tag Extractor}
+Klasa \texttt{TagExtractor} jest odpowiedzialna za wyciąganie tagów z piosenek. Każda piosenka zawiera tagi, na które skłądają się: nazwa artysty, nazwa artystów z albumu, tytuł, data wydania, nazwa albumu, URI piosenki, URI obrazka cover. Deklaracje tych tagów pokazane są na listingu nr \ref{lst:Tag-tagdeclaration}.
+
+
+\begin{lstlisting}[caption=Deklaracja tagów, label={lst:Tag-tagdeclaration}, language=kotlin]
+	data class SongInfo(
+	val artists: List<String>?,
+	val albumArtists: List<String>?,
+	val title: String?,
+	val releaseDate: String?,
+	val album: String?,
+	val fileUri: Uri?,
+	val coverUri: Uri?,
+	)
+	
+\end{lstlisting}
+
+Metoda \texttt{buildSongInfo()} przedstawiona na listingu nr \ref{lst:Tag-buildsonginfo} jest odpowiedzialna za parsowanie metadanych. Otrzymuje 
+
+\begin{lstlisting}[caption=Metoda \texttt{buildSongInfo()}, label={lst:Tag-buildsonginfo}, language=kotlin]
+	@OptIn(UnstableApi::class)
+	private fun buildSongInfo(metadata: Metadata, uri: Uri?): SongInfo {
+		val metadataList = mutableListOf<Metadata.Entry>()
+		for(i in 0 until metadata.length()) {
+			metadataList.add(metadata.get(i))
+		}
+		Log.d("${javaClass.simpleName}", "Metadata list: $metadataList")
+		
+		when(metadataList[0]) {
+			is VorbisComment -> {
+				fun handleMissingTags(map: MutableMap<String?, Any?>) {
+					if(map["ALBUMARTIST"] == null) map["ALBUMARTIST"] = List<String>(1,{"Unknown"} )
+				}
+				
+				val entryMap: MutableMap<String?, Any?> = mutableMapOf()
+				
+				// the last element `picture` screws up the logic and it only has a mimetype value
+				// which i think is useless
+				metadataList.take(metadataList.size - 1).fastForEach {
+					val entry = it as VorbisComment
+					
+					val key = entry.key
+					val value = entry.value
+					when(key) {
+						"ALBUMARTIST", "ARTIST" -> {
+							if(!entryMap.containsKey(key)) {
+								entryMap[key] = mutableListOf<String?>(value)
+							} else {
+								(entryMap[key] as? MutableList<String?>)?.add(value)
+							}
+						}
+						
+						else -> {
+							// assert(!entryMap.containsKey(key))
+							if(entryMap.containsKey(key)) {
+								Log.w(javaClass.simpleName, "Unhandled duplicate key: $key")
+								return@fastForEach
+							}
+							entryMap[key] = value
+						}
+					}
+				}
+				
+				handleMissingTags(entryMap)
+				
+				val coverUri = imageManager.extractAlbumimage(
+				uri,
+				entryMap["ALBUMARTIST"] as List<String>,
+				entryMap["ALBUM"] as String
+				)
+				
+				return SongInfo(
+				artists = entryMap["ARTIST"] as? List<String>?,
+				albumArtists = entryMap["ALBUMARTIST"] as List<String>,
+				title = entryMap["TITLE"] as? String?,
+				album = entryMap["ALBUM"] as String?,
+				releaseDate = entryMap["DATE"] as? String?,
+				fileUri = uri,
+				trackNumber = (entryMap["TRACKNUMBER"] as? String?)?.toInt(),
+				coverUri = coverUri,
+				).also {
+					Log.d(javaClass.simpleName, "Vorbis Song: $it")
+				}
+				
+			}
+			
+			is Id3Frame -> {
+				fun handleMissingTags(map: MutableMap<String, List<String>>) {
+					if(map["TPE2"] == null) map["TPE2"] = List<String>(1,{"Unknown"} )
+				}
+				
+				val entryMap: MutableMap<String, List<String>> = mutableMapOf()
+				metadataList.fastForEach {
+					val entry = it as Id3Frame
+					Log.d(javaClass.simpleName, "Id3 metadata: $entry")
+					
+					when(entry) {
+						is TextInformationFrame -> {
+							entryMap[entry.id] = entry.values
+						}
+						
+						else -> {
+							Log.w(javaClass.simpleName, "Unimplemented id3 frame: $entry")
+						}
+					}
+				}
+				
+				handleMissingTags(entryMap)
+				
+				val coverUri = imageManager.extractAlbumimage(
+				uri,
+				entryMap["TPE2"]?: emptyList(),
+				entryMap["TALB"]?.get(0).toString()
+				
+				)
+				
+				return SongInfo(
+				artists = entryMap["TPE1"],
+				albumArtists = entryMap["TPE2"] as List<String>,
+				title = entryMap["TIT2"]?.get(0),
+				releaseDate = entryMap["TDA"]?.get(0),
+				album = entryMap["TALB"]?.get(0),
+				fileUri = uri,
+				trackNumber = entryMap["TRCK"]?.get(0)?.let {
+					return@let it.takeWhile { it != '/' }.toInt()
+				},
+				coverUri = coverUri
+				).also {
+					Log.d(javaClass.simpleName, "id3 Song: $it")
+				}
+			}
+			
+			else -> {
+				metadataList.fastForEach {
+					Log.w(
+					javaClass.simpleName,
+					"Unhendled tag format: ${it::class.simpleName}, metadata: $it"
+					)
+				}
+				
+				return SongInfo(
+				null, mutableListOf("Unknown"), null, null, null, null, null, null
+				)
+			}
+		}
+	}
+\end{lstlisting}
+
+Instrukcje w wierszach od 3 do 6 odpowiedzialne są za tworzenie listy metadanych. Następuje inicjalizacja pustej lsity \texttt{metadataList}. Następnie pętla przeszukuje po metadata.length, następnie dodaje każdy wpis do listy.
+W wierszach od 9 do	120 znajduje się pętla while, odpowiedzialna za warunkowe sprawdzanie formatu danych. Instrukcja składa się z tzech części: \texttt{VorbisComment}, \texttt{Id3Frame} oraz \texttt{else}.
+\begin{enumerate}
+	\item \texttt{VorbisComment} znajdujące się w wierszach od 10 do 65 odpowiedzialne jest za parsowanie gdy mamy do czynienia z formatem metadanych typu Vorbis.
+	Funkcja \texttt{handleMissingTags()} w wierszach od 11 do 13 jest odpowiedzialna za wypełnienie brakujących pól domyślnymi wartościami. Następnie w wierszach od 15 do 42 tworzona jest mapa wejścia oraz parsowanie.
+	W wierszach od 44 do 50 następuje wywołanie funkcji uzupełniającej brakujące tagi oraz ekstrakcja coveru piosenki. Wyodrębnia wbudowany w plik audio cover oraz zapisuje go do pliku w pamięci aplikacji.
+	W wierszach od 52 do 63 tworzony jest obiekt SongInfo.
+	
+	\item \texttt{Id3Frame} znajduje się w wierszach od 67 do 111. Odpowiedzialne za parsowanie gdy mamy do czynienia z formatem Id3Frame. Działa podobnie do poprzednika. Mamy funkcję wewnętrzną która tworzy brakujące tagi, tworzona jest mapa oraz następuje parsowanie, wywołanie funkcji tworszącej brakujące tagi oraz ekstrakcja coveru i na koniec tworzony jest obiekt SongInfo dla tego formatu.
+	
+	\item \texttt{else} znajduje się w wierszach od 113 do 124. Jest wykonywana gdy natrafimy na nieobsługiwany przez aplikację format. Ostrzeżenie jest zapisywane do logów oraz zwracane jest \texttt{SongInfo} zawierające minimalne informacje.
+\end{enumerate}
+
+Metoda \texttt{TagExtractor} przedstawiona na listingu \ref{lst:Tag-tagextractor}. Metoda jest odpowiedzialna za skanowanie plików audio przekazywanych jako lista \texttt{SongFile} oraz wyodrębnienia ich z metadanych.
+
+\begin{lstlisting}[caption=Metoda \texttt{TagExtractor()}, label={lst:Tag-tagextractor}, language=kotlin]
+	@OptIn(UnstableApi::class)
+	fun extractTags(fileList: List<MusicFileLoader.SongFile>): List<SongInfo> {
+		val tagsList = mutableListOf<SongInfo>()
+		
+		for(file in fileList) {
+			val mediaItem = MediaItem.fromUri("${file.uri}")
+
+			val trackGroups = MetadataRetriever.retrieveMetadata(context, mediaItem).get()
+			
+			if(trackGroups != null) {
+				// Parse and handle metadata
+				assert(trackGroups.length == 1)
+				
+				val tags = trackGroups[0]
+				.getFormat(0)
+				.metadata
+				.let {
+					buildSongInfo(
+					it!!,
+					file.uri
+					)
+				}
+				
+				tagsList.add(tags)
+			}
+		}
+		return tagsList
+	}
+\end{lstlisting}
+Instrukcja w wierszu 3 tworzy pustą listę do któej będą wkładane obiekty \texttt{SongInfo}.
+
+Pętla for przechodzi przez każdy plik \texttt{SongFile} oraz tworzy obiekt \texttt{MediaItem} w wierszu 6, pobiera metadane w wierszu 8, instrukcja if w wierszach od 10 do 25 jest odpowiedzialna za walidację i parsowanie, sprawdza, czy \texttt{trackGroups} nie jest null. \texttt{assert} w wierszu 12 zakłada, że metadane będą w jednym tracku. Następnie w \texttt{tags} uzysujemy dostęp do metadanych oraz parsujemy w \texttt{buildSongInfo}.
+W wierszu 24 dodajemy wynik do \texttt{tagList}.
+W wierszu 27 zwracamy \texttt{tagList}.
+
+\subsubsection{MusicFileLoader}
+Zadanie \texttt{MusicFileLoader} znalezienie wszystkich plików muzycznych z wybranego przez użytkownika folderu.
+Na listingu nr \ref{lst:mfl-fullcode}.
+
+\begin{lstlisting}[caption=Kod \texttt{MusicFileLoader}, label={lst:mfl-fullcode}, language=kotlin]
+	package com.example.raptor
+	
+	import android.content.Context
+	import android.content.Intent
+	import android.net.Uri
+	import android.provider.DocumentsContract
+	import android.util.Log
+	import androidx.activity.compose.ManagedActivityResultLauncher
+	import androidx.activity.compose.rememberLauncherForActivityResult
+	import androidx.activity.result.contract.ActivityResultContracts
+	import androidx.compose.runtime.Composable
+	import androidx.compose.ui.util.fastForEach
+	import androidx.documentfile.provider.DocumentFile
+	import dagger.hilt.android.qualifiers.ApplicationContext
+	import kotlinx.coroutines.flow.MutableStateFlow
+	import javax.inject.Inject
+	
+	/**
+	* Handles the loading of music files in a given directory and its subdirectories as well as
+	* launching a file picker instance
+	*/
+	class MusicFileLoader
+	@Inject constructor( @ApplicationContext private val context: Context) {
+		/**
+		* Dataclass representing a song file
+		*
+		* @param filename Name of the file
+		* @param uri `Uri` corresponding to the file
+		* @param mimeType The type of the file
+		*/
+		data class SongFile(val filename: String, val uri: Uri, val mimeType: String)
+		
+		/**
+		* Observable list of `SongFile` currently loaded
+		*/
+		var songFileList = MutableStateFlow<List<SongFile>>(emptyList())
+		private set
+		
+		private lateinit var launcher : ManagedActivityResultLauncher<Uri?, Uri?>
+		
+		private fun traverseDirs(treeUri: Uri): List<SongFile> {
+			val _songFiles = mutableListOf<SongFile>()
+			
+			fun visit(uri: Uri) {
+				val root = DocumentFile.fromTreeUri(context, uri)
+				Log.d(javaClass.simpleName, "Visiting dir: ${root?.name}")
+				val childDirs = root?.listFiles()?.filter { it.isDirectory }
+				
+				childDirs?.fastForEach { visit(it.uri) }
+				
+				val songFiles = root?.listFiles()
+				?.filter {
+					it.type?.slice(0..4) == "audio"
+				}
+				?.map {
+					SongFile(
+					filename = it.name.toString(),
+					uri = it.uri,
+					mimeType = it.type.toString()
+					)
+				}
+				
+				Log.d(javaClass.simpleName, "Visited dir ${root?.name}, songs: ${songFiles?.map { it
+						.filename 
+				}}")
+				
+				_songFiles.addAll(songFiles?: emptyList())
+				
+			}
+			
+			visit(treeUri)
+			
+			return _songFiles
+		}
+		
+		/**
+		* \@Composable function that prepares the file picker launcher
+		*
+		* Must be called before `launch()`
+		*/
+		@Composable
+		fun PrepareFilePicker() {
+			val contentResolver = context.contentResolver
+			
+			launcher = rememberLauncherForActivityResult(
+			contract = ActivityResultContracts.OpenDocumentTree()
+			) { treeUri: Uri? ->
+				treeUri?.let {
+					val permissions = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+					Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+					contentResolver.takePersistableUriPermission(treeUri, permissions)
+					
+					Log.d(javaClass.simpleName, "Selected: $it")
+					songFileList.value = traverseDirs(treeUri)
+				}
+			}
+		}
+		
+		/**
+		* Launches the file picker
+		*/
+		fun launch() {
+			launcher.launch(null)
+		}
+	}
+\end{lstlisting}
+Na początku znajduje się klasa danych \texttt{SongFile} w wierszu 31. Służy do przechowywania informacji o pojedynczym pliku audio.
+W wierszach 36 i 37 jest zmienna \texttt{songFileList}, służącą do przechowywania listy obiektów \texttt{SongFile}.
+W wierszu 39 znajduje się zmienna \texttt{launcher}, któy zwraca uri folderu wybranego przez użytkownika.
+Funkcja \texttt{TraverseDirs} w wierszach od 41 do 74 jest odpowiedzialna za rekurencyjne przeszukiwanie folderu określonego przez \texttt{treeUri}. Zbiera wszystkie pliki audio znajdujące się w tym folderze.
+Najpierw tworzona jest lista \texttt{\_songFiles} która będze przechowywać wyniki. następnie tworzona jest funkcja wewnętrzna \texttt{visit} która wywołuje obiekt reprezentujący wybrany folder, następnie pliki są listowane oraz oddzielane od folderu. Następnie rekurencyjnie wywołujemy dla każdego katalogu \texttt{visit(it.uri)}. Następnie w bieżącym katalogu filtrowane są pliki w wiwerszach od 52 do 54. Następnie z każdego pliku tworzony jest obiekt \texttt{SongFile} a następnie dołączany do \texttt{\_SongFiles}.
+Na koniec zwracane jest \texttt{\_SongFiles}.
+Następnie znajduje się funkcja \texttt{PrepareFilePicker} w wierszach od 82 do 97. Funkcja jest odpowiedzialna za przygotowanie launchera.
+\texttt{rememberLauncherForActivityResult} 
+pozwala na stworzenie obiektu launchera który pozwoli na otwarice \texttt{OpenDocumentTree}.
+Kontrakt \texttt{ActivityResultContracts.OpenDocumentTree()} pozwala na wybranie całego folderu. Następnie w wierszach od 88 do 96 znajdują się instrukcje definiujące uprawnienia, aby zachować uprawnienia potrzebne jest
+
+\texttt{takePersistableUriPermission()}.
+
+\texttt{songFileList.value = traverseDirs(treeUri)} służy do aktualizacji flow, URI folderu przekazywane jest do funkcji \texttt{traverseDirs}.
+
+Na koniec w wierszach od 102 do 104 znajduje się funkcja \texttt{launch}, odpowwiedzialna za uruchomienie selektora folderów.
+
+\subsection{Ładowanie obrazów albumów}
+
+Za ładowanie obrazów z plików muzycznych odpowiedzialna jest klasa \texttt{ImageManager}, kod której umieszczony jest na listingu nr. \ref{lst:ImageManager_struct}.
+
+\begin{lstlisting}[caption=Strukutura klasy \texttt{ImageManager}, label={lst:ImageManager_struct}, language=kotlin]
+class ImageManager @Inject constructor(@ApplicationContext private val context: Context) {
+    fun extractAlbumimage(
+        uri: Uri?,
+        artistNames: List<String>,
+        albumName: String
+    ): Uri? {
+        val retriever = MediaMetadataRetriever()
+
+        retriever.setDataSource(context, uri)
+        val pictureBytes = retriever.embeddedPicture
+
+        val bitmapFile = File(context.filesDir,
+                artistNames.fastJoinToString(";") + ":$albumName"
+        )
+
+        pictureBytes?.let {
+            bitmapFile.writeBytes(pictureBytes)
+        }
+
+        retriever.release()
+
+        return bitmapFile.toUri()
+    }
+
+    fun getBitmapFromAppStorage(uri: Uri?): ImageBitmap {
+        Log.d(javaClass.simpleName, "Collecting bitmap with uri: $uri")
+        if(uri != null) {
+            try {
+                context.contentResolver.openInputStream(Uri.parse(uri.toString())).use {
+                    return BitmapFactory.decodeStream(it)
+                        .asImageBitmap()
+                }
+            } catch(e: FileNotFoundException) {
+                Log.e(javaClass.simpleName, "Can't parse thumbnail at: $uri")
+                return ImageBitmap(1,1)
+            }
+        } else {
+            return ImageBitmap(1,1,)
+        }
+    }
+}
+\end{lstlisting}
+
+Na początku klasy, do konstruktora, wstrzykiwana jest zależność \texttt{context} kontekstu aplikacji. Klasa potrzebuje go, dlatego, że wchodzi w szerszą interakcję z funkcjami systemowymi.
+
+Metoda \texttt{extractAlbumimage()} zadeklarowana na linijce nr. 2, odpowiedzialna jest za wyciąganie miniaturki albumu z pliku i umieszczanie jej w katalogu głównym aplikacji. Parametr \texttt{uri} to odnośnik do danego pliku muzycznego. Parametry \texttt{artistNames} i \texttt{albumName} to respektywnie lista nazw autorów danej piosenki i nazwa albumu. Dwa ostatnie parametry będą potrzebne do nazwania danej miniaturki później w metodzie. Na początku metody, czyli linijce nr. 7, tworzony jest obiekt \texttt{MediaMetadataRetriever} i przypisany do zmiennej \texttt{retriever}. Klasa ta służy do wyciągania informacji z plików muzycznych. W tym przypadku pozwoli ona wyciągnąć miniaturkę w danym pliku zawartą. Na linijce nr. 9, ustawiane jest źródło dla \texttt{retirevera} jako parametr \texttt{uri}. Następnie, tworzona jest  zmienna \texttt{pictureBytes}, do której przypisywane są surowe bajty tworzące miniaturkę. Zmienna \texttt{bitmapFile} reprezentuje instancję pliku do jakiego ma być zapisany bitmap. Struktura nazwy pliku to \texttt{<nazwa\_artysty1;nazwa\_artysty2...>;<nazwa\_albumu>}. Następnie, \texttt{pictureBytes} jest zapisywane do pliku \texttt{bitmapFile}. Na końcu funkcji, na linijce nr. 20, zwalniane jest miejsce potrzebne na \texttt{retrievera} i na linijce nr. 22 zwracane jest \texttt{uri} \texttt{bitmapFile}.
+
+Druga metoda w klasie to \texttt{getBitmapFromAppStorage()}, zadeklarowana na linijce nr. 25. Ma ona na celu wczytanie miniaturki z pamięci aplikacji, nie z pliku muzycznego. Parametr \texttt{uri} to odnośnik do pliku z miniaturką. Na linijce nr. 27 sprawdzane jest czy parametru \texttt{uri} istnieje. Jeżeli tak to otwierany jest plik przy pomocy \texttt{uri}, używając \texttt{API} \texttt{contentResolver}. Używając zwróconego przez niego strumienia, tworzony jest bitmap, który jest konwertowany do klasy \texttt{ImageBitmap}, używanej bezpośrednio przez \texttt{Compose}. Jeżeli \texttt{uri} nie istnieje, zostaje zwracany placeholderowy \texttt{ImageBitmap}, jak widać na linijce nr. 37.

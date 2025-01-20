@@ -1,6 +1,17 @@
 \babel@toc {polish}{}\relax 
-\contentsline {figure}{\numberline {{1}.1}{\ignorespaces \centering {Mockup widoku biblioteki - listing wykonawców}}}{3}{figure.caption.1}%
-\contentsline {figure}{\numberline {{1}.2}{\ignorespaces \centering {Mockup widoku albumów danego wykonawcy}}}{4}{figure.caption.2}%
-\contentsline {figure}{\numberline {{1}.3}{\ignorespaces \centering {Mockup widoku wyboru utworu}}}{4}{figure.caption.3}%
-\contentsline {figure}{\numberline {{1}.4}{\ignorespaces \centering {Mockup odtwarzacza}}}{5}{figure.caption.4}%
-\contentsline {figure}{\numberline {{1}.5}{\ignorespaces \centering {Mockup dyktafonu}}}{5}{figure.caption.5}%
+\contentsline {figure}{\numberline {{1}.1}{\ignorespaces \centering {Mockup widoku biblioteki - listing wykonawców}}}{5}{figure.caption.1}%
+\contentsline {figure}{\numberline {{1}.2}{\ignorespaces \centering {Mockup widoku albumów danego wykonawcy}}}{6}{figure.caption.2}%
+\contentsline {figure}{\numberline {{1}.3}{\ignorespaces \centering {Mockup widoku wyboru utworu}}}{6}{figure.caption.3}%
+\contentsline {figure}{\numberline {{1}.4}{\ignorespaces \centering {Mockup widoku wyboru utworu}}}{7}{figure.caption.4}%
+\contentsline {figure}{\numberline {{3}.1}{\ignorespaces \centering {Model relacji bazy}}}{12}{figure.caption.5}%
+\contentsline {figure}{\numberline {{7}.1}{\ignorespaces \centering {Prośba o podanie odcisku palca.}}}{76}{figure.caption.6}%
+\contentsline {figure}{\numberline {{7}.2}{\ignorespaces \centering {Widok po zweryfikowaniu odcisku.}}}{78}{figure.caption.7}%
+\contentsline {figure}{\numberline {{7}.3}{\ignorespaces \centering {Włączenie wyboru folderu.}}}{80}{figure.caption.8}%
+\contentsline {figure}{\numberline {{7}.4}{\ignorespaces \centering {Wybieranie folderu z muzyką.}}}{82}{figure.caption.9}%
+\contentsline {figure}{\numberline {{7}.5}{\ignorespaces \centering {Widok po załadowaniu plików.}}}{84}{figure.caption.10}%
+\contentsline {figure}{\numberline {{7}.6}{\ignorespaces \centering {Widok po wejściu w autora.}}}{86}{figure.caption.11}%
+\contentsline {figure}{\numberline {{7}.7}{\ignorespaces \centering {Widok wyboru piosenki.}}}{88}{figure.caption.12}%
+\contentsline {figure}{\numberline {{7}.8}{\ignorespaces \centering {Widok odtwarzacza.}}}{90}{figure.caption.13}%
+\contentsline {figure}{\numberline {{7}.9}{\ignorespaces \centering {Próba zagrania następnej piosenki, grając ostatnią.}}}{92}{figure.caption.14}%
+\contentsline {figure}{\numberline {{7}.10}{\ignorespaces \centering {Aplikacja zmieniła kolorystykę na jasną.}}}{94}{figure.caption.15}%
+\contentsline {figure}{\numberline {{7}.11}{\ignorespaces \centering {Obrócenie ekranu.}}}{95}{figure.caption.16}%
