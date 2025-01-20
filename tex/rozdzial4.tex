@@ -358,7 +358,7 @@ data class AuthorWithAlbums(
 
 Na listingu nr.~\ref{lst:AlbumWithAuthors_class} przedstawiona jest klasa \texttt{AlbumWithAuthors}. Definiuje ona relację danego albumu z jego autorami. Dlatego, że relacja jest $M$ do $N$, w adnotacji \texttt{@Relation} dodane jest odniesienie do tabeli relacji \texttt{AlbumAuthorCrossRef}, opisanej w sekcji nr. ~\ref{sec:AlbumAuthorCrossRef}. Klucze, jakie mają być porównywane są zdefiniowane w parametrach \texttt{parentColumn}, dla \texttt{id} albumu i \texttt{entityColumn} dla nazwy autora. Wynikiem tej relacji jest lista albumów. Sytuacja wygląda podobnie w \texttt{AuthorWithAlbums}, na listingu nr.~\ref{lst:AuthorWithAlbums_class}. Tym razem to autor jest rodzicem i oczekujemy od relacji listy albumów danego autora.
 
-\subsububsection{Czujnik światła}
+\subsection{Czujnik światła}
 Czujnik światła został zaimplementowany za pomocą wbudowanej funkcji. Zadaniem czujnika jest dynmiczna zmiana schematu kolorów aplikacji na podstawie danych otrzymanych z czujnika światła wbudowanego w urządzeniu mobilnym z systemem android.
 
 \begin{lstlisting}[caption=Implementacja czujnika światłą w \texttt{MainActivity.kt}, label={lst:LightSensorMain}, language=kotlin]
@@ -1080,3 +1080,142 @@ fun LandscapeView(selectedAlbum: Pair<Album, ImageBitmap>, navController: NavHos
 }    
 \end{lstlisting}
 W tych dwóch funkcjach znajdują się elementy ogólnie używane przez wszystkie ekrany pozwalająć na ich wielofunkcyjność, pochodzącą z potrzeby wywoływanie tylko ich części.
+
+\subsection{Audio player}
+Logika audio player znajduje się w pliku AudioPlayer.kt.
+Działanie rozpoczyna od inicjalizacji ExoPlayer przedstawionej na listingu nr \ref{lst:player-exoinit}.
+\begin{lstlisting}[caption=Inicjalizacja exoplayer, label={lst:player-exoinit}, language=kotlin]
+	class AudioPlayer @Inject constructor(@ApplicationContext context: Context) {
+		private val player = ExoPlayer.Builder(context).build().apply {
+			setAudioAttributes(
+			AudioAttributes.Builder()
+			.setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+			.setUsage(C.USAGE_MEDIA)
+			.build(),
+			true
+			)
+		}
+\end{lstlisting}
+setAudioAttributes ustawia atrybuty odtwarzania audio a ExoPlayer.Builder tworzy nową instancję odtwarzacza.
+Następnie w kodzie znajduje się funkcja \texttt{updateListeners}, przedstawiona na listing nr \ref{lst:player-update}.
+Funkcja jest odpowiedzialna za zarządzanie stanem odtwarzania, używa obserwowanego stanu odtwarzacza \texttt{playbackState} i słuchacza, aby reagować na zmiany w stanie odtwarzania.
+\begin{lstlisting}[caption=Zarządzanie stanem, label={lst:player-update}, language=kotlin]
+	private fun updateListeners(song: Song) {
+		if(currentSong == song) {
+			return
+		}
+		
+		currentSong = song
+		
+		player.addListener(
+		object: Player.Listener {
+			override fun onIsPlayingChanged(isPlaying: Boolean) {
+				Log.d(AudioPlayer::class.simpleName, if (isPlaying) "player is playing $song"
+				else "player is not playing")
+				
+				// TODO: this feels hacky... maybe this callback should be remove alltogether
+				if(
+				player.playbackState == ExoPlayer.STATE_ENDED ||
+				player.playbackState == ExoPlayer.STATE_BUFFERING
+				) {
+					return
+				}
+				
+				playbackState.value = if(isPlaying)
+				PlaybackStates.STATE_PLAYING else PlaybackStates.STATE_PAUSED
+				Log.d(AudioPlayer::class.simpleName, "Playback: ${playbackState
+					.value.name}")
+			}
+			
+			override fun onPlaybackStateChanged(playbackState: Int) {
+				when(playbackState) {
+					Player.STATE_BUFFERING -> {
+						Log.d(AudioPlayer::class.simpleName, "Playback: ${
+							PlaybackStates
+							.STATE_BUFFERING}")
+						this@AudioPlayer.playbackState.value = PlaybackStates.STATE_BUFFERING
+					}
+					
+					Player.STATE_ENDED -> {
+						Log.d(AudioPlayer::class.simpleName, "Playback: ${
+							PlaybackStates
+							.STATE_ENDED.name}")
+						this@AudioPlayer.playbackState.value = PlaybackStates.STATE_ENDED
+					}
+					
+					Player.STATE_IDLE -> {
+						Log.d(AudioPlayer::class.simpleName, "Playback: ${
+							PlaybackStates
+							.STATE_IDLE.name}")
+						this@AudioPlayer.playbackState.value = PlaybackStates.STATE_IDLE
+					}
+					
+					Player.STATE_READY -> {
+						Log.d(AudioPlayer::class.simpleName, "Playback: ${
+							PlaybackStates
+							.STATE_READY.name}")
+						this@AudioPlayer.playbackState.value = PlaybackStates.STATE_READY
+					}
+				}
+			}
+		}
+		)
+	}
+\end{lstlisting}
+Funkcja wewnętrzna \texttt{onIsPlayingChanged} jest odpowiedzialna za wykrywanie czy odtwarzacz gra oraz aktulaizowanie stanu. Funkcja \texttt{onPlaybackStateChanged} jest odpowiedzialna za reagowanie na zmiany stanu exoplayera.
+\texttt{playbackState} przechowuje stan.
+Następnie jest funkcja \texttt{playSong} odpowiedzialna za ustawienie pliku audio do odtwarzania oraz rozpoczęcie odtwarzania, przedstawiona na listingu nr \ref{lst:player-playsong}.
+\begin{lstlisting}[caption=Funkcja playsong, label={lst:player-playsong}, language=kotlin]
+	fun playSong(song: Song) {
+		assert(isPlayingInternal == false)
+		assert(!player.isPlaying)
+		assert(playbackState.value != PlaybackStates.STATE_PLAYING)
+		Log.d(javaClass.simpleName, "calling playSong")
+		
+		Log.d(AudioPlayer::class.simpleName, "Song uri: ${song.fileUri}")
+		
+		updateListeners(song)
+		
+		if(player.currentMediaItem.hashCode() != MediaItem.fromUri(song.fileUri!!.toUri())
+		.hashCode()) { //FIXME: we ball
+			player.apply {
+				setMediaItem(MediaItem.fromUri(song.fileUri.toUri()))
+				prepare()
+			}
+			
+			Log.d(javaClass.simpleName, "playSong(), songs don't match")
+		}
+		
+		player.play()
+		
+	}
+\end{lstlisting}
+\texttt{MediaItem.fromUr} tworzy element multimedialny z URI pliku audio. \texttt{setMediaItem} ustawia element multimedialny do odtwarzania. \texttt{prepare} przygotowuje odtwarzacz do odtwarzania. \texttt{play} rozpoczyna odtwarzanie.
+Funkcje \texttt{pause} oraz \texttt{restartCurrentPlayback} przedstawione na listingu nr \ref{lst:player-pausecurr} odpowiedzialne są za pauzowanie oraz ponownym odtwarzaniem.
+\begin{lstlisting}[caption=Funkcje pausei restartCurrentPlayuback, label={lst:player-pausecurr}, language=kotlin]
+	fun restartCurrentPlayback() {
+		player.seekTo(0)
+		player.play()
+	}
+	fun pause() {
+		assert(playbackState.value == PlaybackStates.STATE_PLAYING)
+		assert(isPlayingInternal)
+		
+		Log.d(javaClass.simpleName, "calling pause")
+		player.pause()
+		
+	}
+\end{lstlisting}
+Funkcja \texttt{changeCurrentPosition} przedstawiona na listingu nr \ref{lst:player-position} odpowiedzialna jest za zmanę aktualnej pozycji odtwarzania.
+\begin{lstlisting}[caption=Funkcja zmainy pozycji, label={lst:player-position}, language=kotlin]
+	fun changeCurrentPosition(time: Long) {
+		player.seekTo(time)
+	}
+\end{lstlisting}
+\texttt{seekTo} przenosi odtwarzacz do konkretnego miejsca.
+Na samym końcu znajduje się funkcja \texttt{releasePlayer} która jest odpowiedzialna za czyszczenie pamięci, przedstawiona jest na listingu nr \ref{lst:player-release}
+\begin{lstlisting}[caption=Funkcja czyszczenia pamięci, label={lst:player-release}, language=kotlin]
+	fun releasePlayer() {
+		player.release()
+	}
+\end{lstlisting}
